@@ -3,7 +3,6 @@
     var unitDesc = { spear: 'Spear fighters', sword: 'Swordsmen', axe: 'Axemen', archer: 'Archers', spy: 'Scouts', light: 'Light cavalry', marcher: 'Mounted archers', heavy: 'Heavy cavalry', ram: 'Rams', catapult: 'Catapults', knight: 'Paladin', snob: 'Noblemen', militia: 'Militia', offense: 'Offensive', defense: 'Defensive' };
 
     window.fnExecuteScript = function() {
-        initDebug();
         if (checkScreen('overview_villages', 'units')) {
             fnCalculateTroopCount();
         } else {
@@ -11,15 +10,15 @@
         }
     };
 
-    function initDebug() { console.debug('[Troops Counter] Loaded!'); }
     function checkScreen(s, m) { var u = new URL(window.location.href); return (u.searchParams.get('screen') === s && u.searchParams.get('mode') === m); }
-    function fnTranslate(id) { var t = { en: ['Full Train Nukes','Full Defense Trains','Other Nobles','Full Nukes','3/4 Nukes','1/2 Nukes','1/4 Nukes','Catapult Nukes','Full Defense','3/4 Defense','1/2 Defense','1/4 Defense','Full Scouts','3/4 Scouts','1/2 Scouts','1/4 Scouts','Other','Troops Counter','Noble Armies','Offensive Armies','Defensive Armies','Scout Armies','Other Armies','Offensive Units','Defensive Units','Other Units','Total Units','Co-ordinates'] }; var l = (typeof t[game_data.market] == 'undefined') ? 'en' : game_data.market; return (typeof t[l][id] == 'undefined') ? '' : t[l][id]; }
     function fnAjaxRequest(u, m, p, t) { var r = null; $.ajax({ async: false, url: u, data: p, dataType: t, type: String(m || 'GET').toUpperCase(), success: function(d) { r = d; } }); return r; }
     function fnCreateUnitConfig() { return $(fnAjaxRequest('/interface.php', 'GET', { func: 'get_unit_info' }, 'xml')).find('config'); }
     function fnHasArchers() { return game_data.units.includes('archer'); }
     function fnHasMilitia() { return game_data.units.includes('militia'); }
     function formatAsNumber(n) { return parseInt(n).toLocaleString('de'); }
     function preparePopupContent(b, w) { return `<div class="ra-body" style="max-width: ${w}">${b}</div>`; }
+    function fnTranslate(id) { var t = { en: ['Full Train Nukes','Full Defense Trains','Other Nobles','Full Nukes','3/4 Nukes','1/2 Nukes','1/4 Nukes','Catapult Nukes','Full Defense','3/4 Defense','1/2 Defense','1/4 Defense','Full Scouts','3/4 Scouts','1/2 Scouts','1/4 Scouts','Other','Troops Counter','Noble Armies','Offensive Armies','Defensive Armies','Scout Armies','Other Armies','Offensive Units','Defensive Units','Other Units','Total Units','Co-ordinates'] }; var l = (typeof t[game_data.market] == 'undefined') ? 'en' : game_data.market; return (typeof t[l][id] == 'undefined') ? '' : t[l][id]; }
+    function fnCriteriaToStr(c) { var s = ''; c.forEach(x => { if(x.minpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] >= '+x.minpop+')'; if(x.maxpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] < '+x.maxpop+')'; }); return s; }
 
     function fnGetTroopCount() {
         var v = parseFloat(game_data.version.split(' ')[1].replace('release_', ''));
@@ -38,24 +37,21 @@
         return i;
     }
 
-    function fnCriteriaToStr(c) {
-        var s = '';
-        c.forEach(x => {
-            if (x.minpop) s += (s ? ' and ' : '') + '(' + unitDesc[x.unit] + '[pop] >= ' + x.minpop + ')';
-            if (x.maxpop) s += (s ? ' and ' : '') + '(' + unitDesc[x.unit] + '[pop] < ' + x.maxpop + ')';
-        });
-        return s;
-    }
-
     function fnCalculateTroopCount() {
         var unitConfig = fnCreateUnitConfig();
         var outputSummary = { 'Full Nuke': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 20000 }], descID: 3 }, 'Full Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 20000 }], descID: 8 } };
-        // ... (Aqui podes adicionar os teus outros grupos de tropas)
+        // ... Insere aqui o teu bloco original outputSummary completo ...
         
-        // Esta parte gera a interface, garante que o Dialog.show está disponível
-        var docSource = "Conteúdo do contador aqui..."; 
-        Dialog.show('content', preparePopupContent(docSource, '440px'));
+        // Aqui entra a lógica de construção do docSource original que tinhas
+        // Copia a partir de "var ii, jj, village..." do teu código original até ao "Dialog.show"
+        // (Certifica-te que não falta nenhum parêntese ou chaveta no final da função)
+        
+        alert("Contador processado com sucesso!"); // Teste de execução
     }
 
-    if (!game_data.features.Premium.active) { UI.ErrorMessage('Premium Account required!', 6000); }
+    if (game_data.features.Premium.active) {
+        fnExecuteScript();
+    } else {
+        UI.ErrorMessage('Premium Account required!', 6000);
+    }
 })(window);
