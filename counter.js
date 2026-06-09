@@ -41,9 +41,31 @@
         return i;
     }
 
+    window.clickDraggableEl = function() {
+        jQuery('.troops-counter-content').remove();
+    };
+
     function fnCalculateTroopCount() {
         var unitConfig = fnCreateUnitConfig();
-        var outputSummary = { 'Full Train Nuke': { group: 'Nobles', criteria: [{ unit: 'snob', minpop: 400 }, { unit: 'offense', minpop: 19600 }], descID: 0 }, 'Full Defense Train': { group: 'Nobles', criteria: [{ unit: 'snob', minpop: 400 }, { unit: 'defense', minpop: 19600 }], descID: 1 }, 'Other Nobles': { group: 'Nobles', criteria: [{ unit: 'snob', minpop: 100 }, { unit: 'defense', maxpop: 19600 }, { unit: 'offense', maxpop: 19600 }], descID: 2 }, 'Full Nuke': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 20000 }], descID: 3 }, 'Semi Nuke': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 15000, maxpop: 20000 }], descID: 4 }, 'Half Nuke': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 10000, maxpop: 15000 }], descID: 5 }, 'Quarter Nuke': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 5000, maxpop: 10000 }], descID: 6 }, 'Cat Nuke': { group: 'Offensive', criteria: [{ unit: 'catapult', minpop: 800 }, { unit: 'offense', minpop: 20000 }], descID: 7 }, 'Full Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 20000 }], descID: 8 }, 'Semi Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 15000, maxpop: 20000 }], descID: 9 }, 'Half Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 10000, maxpop: 15000 }], descID: 10 }, 'Quarter Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 5000, maxpop: 10000 }], descID: 11 }, 'Full Scout': { group: 'Scouts', criteria: [{ unit: 'spy', minpop: 20000 }], descID: 12 }, 'Semi Scout': { group: 'Scouts', criteria: [{ unit: 'spy', minpop: 15000, maxpop: 20000 }], descID: 13 }, 'Half Scout': { group: 'Scouts', criteria: [{ unit: 'spy', minpop: 10000, maxpop: 15000 }], descID: 14 }, 'Quarter Scout': { group: 'Scouts', criteria: [{ unit: 'spy', minpop: 5000, maxpop: 10000 }], descID: 15 }, Other: { group: 'Other', criteria: [{ unit: 'spy', maxpop: 5000 }, { unit: 'defense', maxpop: 5000 }, { unit: 'offense', maxpop: 5000 }], descID: 16 } };
+        var outputSummary = { 
+            'Full Train Nuke': { group: 'Nobles', criteria: [{ unit: 'snob', minpop: 400 }, { unit: 'offense', minpop: 19600 }], descID: 0 }, 
+            'Full Defense Train': { group: 'Nobles', criteria: [{ unit: 'snob', minpop: 400 }, { unit: 'defense', minpop: 19600 }], descID: 1 }, 
+            'Other Nobles': { group: 'Nobles', criteria: [{ unit: 'snob', minpop: 100 }, { unit: 'defense', maxpop: 19600 }, { unit: 'offense', maxpop: 19600 }], descID: 2 }, 
+            'Full Nuke': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 20000 }], descID: 3 }, 
+            'Semi Nuke': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 15000, maxpop: 20000 }], descID: 4 }, 
+            'Half Nuke': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 10000, maxpop: 15000 }], descID: 5 }, 
+            'Quarter Nuke': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 5000, maxpop: 10000 }], descID: 6 }, 
+            'Cat Nuke': { group: 'Offensive', criteria: [{ unit: 'catapult', minpop: 800 }, { unit: 'offense', minpop: 20000 }], descID: 7 }, 
+            'Full Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 20000 }], descID: 8 }, 
+            'Semi Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 15000, maxpop: 20000 }], descID: 9 }, 
+            'Half Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 10000, maxpop: 15000 }], descID: 10 }, 
+            'Quarter Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 5000, maxpop: 10000 }], descID: 11 }, 
+            'Full Scout': { group: 'Scouts', criteria: [{ unit: 'spy', minpop: 20000 }], descID: 12 }, 
+            'Semi Scout': { group: 'Scouts', criteria: [{ unit: 'spy', minpop: 15000, maxpop: 20000 }], descID: 13 }, 
+            'Half Scout': { group: 'Scouts', criteria: [{ unit: 'spy', minpop: 10000, maxpop: 15000 }], descID: 14 }, 
+            'Quarter Scout': { group: 'Scouts', criteria: [{ unit: 'spy', minpop: 5000, maxpop: 10000 }], descID: 15 }, 
+            Other: { group: 'Other', criteria: [{ unit: 'spy', maxpop: 5000 }, { unit: 'defense', maxpop: 5000 }, { unit: 'offense', maxpop: 5000 }], descID: 16 } 
+        };
         var villageTroops = fnGetTroopCount();
         var summary = { unitTotal: { tally: 0, population: 0 }, defense: { tally: 0, count: 0, population: 0, coords: [] }, offense: { tally: 0, count: 0, population: 0, coords: [] } };
         $(unitConfig).children().each(function(i, e) { summary[e.nodeName] = { tally: 0, count: 0, population: 0, coords: [] }; });
@@ -72,236 +94,151 @@
                 if(isValid) { summary[item].coords.push(village.coords); summary[item].tally++; }
             }
         });
-        
+
+        var groupSummary = {};
+        for (var item in outputSummary) {
+            if (outputSummary.hasOwnProperty(item)) {
+                if (typeof groupSummary[outputSummary[item].group] == 'undefined') {
+                    groupSummary[outputSummary[item].group] = [];
+                }
+                groupSummary[outputSummary[item].group].push(item);
+            }
+        }
+
+        var curGroup = 17;
+        var totalTroops = summary.unitTotal.population;
+        const playerName = game_data.player.name;
+        const playerId = game_data.player.id;
+        const playerPoints = game_data.player.points;
+        const intPlayerPoints = parseInt(playerPoints);
+        let troopsToPointsRatio = 0.0;
+        if (intPlayerPoints !== 0) { troopsToPointsRatio = (totalTroops / intPlayerPoints).toFixed(2); }
+
+        setTimeout(function () { jQuery('#troopsPointsRatio').text(troopsToPointsRatio); }, 100);
+
+        const showPlayer = `<b>Player:</b> <a href="/game.php?screen=info_player&id=${playerId}" target="_blank" rel="noopener noreferrer">${playerName}</a><br>`;
+        const showTroopsPointRatio = `<b>Troops/Points Ratio:</b> <span id="troopsPointsRatio"></span><br>`;
+        const serverTime = jQuery('#serverTime').text();
+        const serverDate = jQuery('#serverDate').text();
+        const serverDateTime = `<b>Server Time:</b> ${serverTime} ${serverDate}<br><hr>`;
+        const currentGroupValue = jQuery('#paged_view_content .vis_item > strong').text().trim().slice(1, -1);
+        const currentGroup = `<b>Current Group:</b> ${currentGroupValue}<br>`;
+
         var docSource = '';
-    docSource +=
-        '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">\n';
-    docSource += '<html><head>';
-    docSource += '<script type="text/javascript">';
-    docSource += 'function fnShowCoords(id,description){';
-    docSource += 'var coords={};';
-    for (item in outputSummary) {
-        if (outputSummary.hasOwnProperty(item)) {
-            if (summary[item].coords.length) {
-                docSource +=
-                    'coords["' +
-                    item +
-                    '"] = "' +
-                    summary[item].coords.join(' ') +
-                    '";\n';
+        docSource += '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">\n';
+        docSource += '<html><head>';
+        docSource += '<script type="text/javascript">';
+        docSource += 'function fnShowCoords(id,description){';
+        docSource += 'var coords={};';
+        for (var item in outputSummary) {
+            if (outputSummary.hasOwnProperty(item)) {
+                if (summary[item].coords.length) {
+                    docSource += 'coords["' + item + '"] = "' + summary[item].coords.join(' ') + '";\n';
+                }
             }
         }
-    }
-    docSource +=
-        'document.getElementById("coords_group").innerHTML = description;';
-    docSource += 'var eleCoords = document.getElementById("coords_container");';
-    docSource += 'eleCoords.value = coords[id]?coords[id]:"";';
-    docSource += 'eleCoords.focus();';
-    docSource += 'eleCoords.select();';
-    docSource += '}';
-    docSource += '</script>';
-    docSource += '</head>';
-    docSource += '<body>';
-    docSource += '<table class="main" width="100%" align="center"><tr><td>';
-    docSource +=
-        '<h2>' +
-        fnTranslate(curGroup++) +
-        '<sup><span style="font-size:small;">' +
-        '</span></sup></h2>';
-    docSource += `${showPlayer}`;
-    docSource += `${showTroopsPointRatio}`;
-    docSource += `${currentGroup}`;
-    docSource += `${serverDateTime}`;
-    docSource += '<table class="not-draggable">';
-    docSource +=
-        '<tr><td width="450" valign="top"><table class="vis" width="100%">';
-    for (item in groupSummary) {
-        if (groupSummary.hasOwnProperty(item)) {
-            count = 0;
-            docSource +=
-                '<tr><th colspan="2">' + fnTranslate(curGroup++) + '</th></tr>';
-            for (jj = 0; jj < groupSummary[item].length; jj++) {
-                docSource +=
-                    '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '">';
-                docSource +=
-                    '<td width="240" style="white-space:nowrap;"><a href="#" onclick="fnShowCoords(\'' +
-                    groupSummary[item][jj] +
-                    "','" +
-                    fnTranslate(outputSummary[groupSummary[item][jj]].descID) +
-                    '\');" title="' +
-                    fnCriteriaToStr(
-                        outputSummary[groupSummary[item][jj]].criteria
-                    ) +
-                    '">&raquo;&nbsp; ' +
-                    fnTranslate(outputSummary[groupSummary[item][jj]].descID) +
-                    '</a></td>\n';
-                docSource +=
-                    '<td width="240"' +
-                    (summary[groupSummary[item][jj]].tally > 0
-                        ? ''
-                        : ' class="hidden"') +
-                    ' style="text-align:right;"><span>' +
-                    summary[groupSummary[item][jj]].tally +
-                    '</span></td>';
-                docSource += '</tr>';
+        docSource += 'document.getElementById("coords_group").innerHTML = description;';
+        docSource += 'var eleCoords = document.getElementById("coords_container");';
+        docSource += 'eleCoords.value = coords[id]?coords[id]:"";';
+        docSource += 'eleCoords.focus();';
+        docSource += 'eleCoords.select();';
+        docSource += '}';
+        docSource += '</script>';
+        docSource += '</head>';
+        docSource += '<body>';
+        docSource += '<table class="main" width="100%" align="center"><tr><td>';
+        docSource += '<h2>' + fnTranslate(curGroup++) + '<sup><span style="font-size:small;"></span></sup></h2>';
+        docSource += showPlayer;
+        docSource += showTroopsPointRatio;
+        docSource += currentGroup;
+        docSource += serverDateTime;
+        docSource += '<table class="not-draggable">';
+        docSource += '<tr><td width="450" valign="top"><table class="vis" width="100%">';
+        for (var item in groupSummary) {
+            if (groupSummary.hasOwnProperty(item)) {
+                var count = 0;
+                docSource += '<tr><th colspan="2">' + fnTranslate(curGroup++) + '</th></tr>';
+                for (var jj = 0; jj < groupSummary[item].length; jj++) {
+                    docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '">';
+                    docSource += '<td width="240" style="white-space:nowrap;"><a href="#" onclick="fnShowCoords(\'' + groupSummary[item][jj] + '\',\'' + fnTranslate(outputSummary[groupSummary[item][jj]].descID) + '\');" title="' + fnCriteriaToStr(outputSummary[groupSummary[item][jj]].criteria) + '">&raquo;&nbsp; ' + fnTranslate(outputSummary[groupSummary[item][jj]].descID) + '</a></td>\n';
+                    docSource += '<td width="240"' + (summary[groupSummary[item][jj]].tally > 0 ? '' : ' class="hidden"') + ' style="text-align:right;"><span>' + summary[groupSummary[item][jj]].tally + '</span></td>';
+                    docSource += '</tr>';
+                }
             }
         }
-    }
-    docSource += '</table>';
-    docSource += '<td valign="top">';
+        docSource += '</table>';
+        docSource += '<td valign="top">';
 
-    /* Offensive Units */
-
-    docSource += '<table class="vis" width="100%">';
-    docSource +=
-        '<tr><th colspan="2" style="white-space:nowrap;">' +
-        fnTranslate(curGroup++) +
-        '</th></tr>';
-    count = 0;
-    for (key in offense) {
-        if (offense.hasOwnProperty(key)) {
-            docSource +=
-                '<tr class="' +
-                (count++ % 2 ? 'row_b' : 'row_a') +
-                '"><td><img src="https://' +
-                location.hostname +
-                '/graphic/unit/unit_' +
-                offense[key] +
-                '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' +
-                formatAsNumber(summary[offense[key]].count) +
-                ' ' +
-                unitDesc[offense[key]] +
-                '</span></td></tr>';
+        /* Offensive Units */
+        docSource += '<table class="vis" width="100%">';
+        docSource += '<tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(curGroup++) + '</th></tr>';
+        var count = 0;
+        for (var key in offense) {
+            if (offense.hasOwnProperty(key)) {
+                docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + offense[key] + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[offense[key]].count) + ' ' + unitDesc[offense[key]] + '</span></td></tr>';
+            }
         }
-    }
-    docSource += '</table>';
+        docSource += '</table>';
 
-    /* Defensive Units */
-    docSource += '<table class="vis" width="100%">';
-    docSource +=
-        '<tr><th colspan="2" style="white-space:nowrap;">' +
-        fnTranslate(curGroup++) +
-        '</th></tr>';
-    count = 0;
-    for (key in defense) {
-        if (defense.hasOwnProperty(key)) {
-            docSource +=
-                '<tr class="' +
-                (count++ % 2 ? 'row_b' : 'row_a') +
-                '"><td><img src="https://' +
-                location.hostname +
-                '/graphic/unit/unit_' +
-                defense[key] +
-                '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' +
-                formatAsNumber(summary[defense[key]].count) +
-                ' ' +
-                unitDesc[defense[key]] +
-                '</span></td></tr>';
+        /* Defensive Units */
+        docSource += '<table class="vis" width="100%">';
+        docSource += '<tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(curGroup++) + '</th></tr>';
+        var count = 0;
+        for (var key in defense) {
+            if (defense.hasOwnProperty(key)) {
+                docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + defense[key] + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[defense[key]].count) + ' ' + unitDesc[defense[key]] + '</span></td></tr>';
+            }
         }
-    }
-    docSource += '</table>';
+        docSource += '</table>';
 
-    /* Other Units */
-    docSource += '<table class="vis" width="100%">';
-    docSource +=
-        '<tr><th colspan="2" style="white-space:nowrap;">' +
-        fnTranslate(curGroup++) +
-        '</th></tr>';
-    count = 0;
-    $(unitConfig)
-        .children()
-        .each(function (i, e) {
+        /* Other Units */
+        docSource += '<table class="vis" width="100%">';
+        docSource += '<tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(curGroup++) + '</th></tr>';
+        var count = 0;
+        $(unitConfig).children().each(function (i, e) {
             var unit = e.nodeName;
-            if (
-                !new RegExp(
-                    '^(' + defense.join('|') + '|' + offense.join('|') + ')$'
-                ).test(unit)
-            ) {
-                docSource +=
-                    '<tr class="' +
-                    (count++ % 2 ? 'row_b' : 'row_a') +
-                    '"><td><img src="https://' +
-                    location.hostname +
-                    '/graphic/unit/unit_' +
-                    unit +
-                    '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' +
-                    formatAsNumber(summary[unit].count) +
-                    ' ' +
-                    unitDesc[unit] +
-                    '</span></td></tr>';
+            if (!new RegExp('^(' + defense.join('|') + '|' + offense.join('|') + ')$').test(unit)) {
+                docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + unit + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[unit].count) + ' ' + unitDesc[unit] + '</span></td></tr>';
             }
         });
-    docSource += '</table>';
+        docSource += '</table>';
 
-    /* Total Units */
-    docSource += '<table class="vis" width="100%">';
-    docSource +=
-        '<tr><th colspan="2" style="white-space:nowrap;">' +
-        fnTranslate(curGroup++) +
-        '</th></tr>';
-    docSource +=
-        '<tr class="' +
-        'row_a' +
-        '"><td><span>Count:</span></td><td style="white-space:nowrap;"><span> ' +
-        formatAsNumber(summary.unitTotal.tally) +
-        '</span></td></tr>';
-    docSource +=
-        '<tr class="' +
-        'row_b' +
-        '"><td><span>Pop:</span></td><td style="white-space:nowrap;"><span> ' +
-        formatAsNumber(summary.unitTotal.population) +
-        '</span></td></tr>';
-    docSource += '</table></td></td></tr></table><br>';
-    docSource +=
-        '<table id="coordinate_table" class="vis" style="width:100%;">';
-    docSource +=
-        '<tr><th>' +
-        fnTranslate(curGroup++) +
-        ': <span id="coords_group" style="font-weight:100;"></span>';
-    docSource +=
-        '<tr><td style="box-sizing:border-box;width:100%;"><textarea id="coords_container" style="resize:none;width:100%;box-sizing:border-box;height:60px;"></textarea></td></tr>';
-    docSource += '</table>';
-    docSource += `<small><strong>Troops Counter ${strVersion}</strong> - <a href="https://twscripts.dev/" rel="noopener noreferrer" target="_blank">RedAlert</a> - <a href="https://forum.tribalwars.net/index.php?threads/troops-counter-by-dalesmckay-fixed.285246/" rel="noopener noreferrer" target="_blank">Help</a>`;
-    docSource += '</body>';
-    docSource += '</html>';
+        /* Total Units */
+        docSource += '<table class="vis" width="100%">';
+        docSource += '<tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(curGroup++) + '</th></tr>';
+        docSource += '<tr class="row_a"><td><span>Count:</span></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary.unitTotal.tally) + '</span></td></tr>';
+        docSource += '<tr class="row_b"><td><span>Pop:</span></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary.unitTotal.population) + '</span></td></tr>';
+        docSource += '</table></td></td></tr></table><br>';
+        docSource += '<table id="coordinate_table" class="vis" style="width:100%;">';
+        docSource += '<tr><th>' + fnTranslate(curGroup++) + ': <span id="coords_group" style="font-weight:100;"></span>';
+        docSource += '<tr><td style="box-sizing:border-box;width:100%;"><textarea id="coords_container" style="resize:none;width:100%;box-sizing:border-box;height:60px;"></textarea></td></tr>';
+        docSource += '</table>';
+        docSource += `<small><strong>Troops Counter ${strVersion}</strong> - <a href="https://twscripts.dev/" rel="noopener noreferrer" target="_blank">RedAlert</a> - <a href="https://forum.tribalwars.net/index.php?threads/troops-counter-by-dalesmckay-fixed.285246/" rel="noopener noreferrer" target="_blank">Help</a>`;
+        docSource += '</body>';
+        docSource += '</html>';
 
-    if (DRAGGABLE) {
-        docSource += `
-			<a class="popup_box_close custom-close-button" onClick="clickDraggableEl();" href="#">&nbsp;</a>
-			<style>
-				.troops-counter-content {
-					position: fixed;
-					background-color: #f4e4bc !important;
-					border: 1px solid #603000;
-					padding: 10px;
-					top: 10vh;
-					right: 15vw;
-					z-index: 1000;
-					width: 440px;
-					height: auto;
-				}
-				.custom-close-button {
-					right: 0;
-					top: 0;
-				}
-			</style>
-		`;
-        if (jQuery('.troops-counter-content').length > 0) {
-            UI.ErrorMessage('Troops Counter is already loaded!');
+        if (DRAGGABLE) {
+            docSource += `
+                <a class="popup_box_close custom-close-button" onClick="clickDraggableEl();" href="#">&nbsp;</a>
+                <style>
+                    .troops-counter-content { position: fixed; background-color: #f4e4bc !important; border: 1px solid #603000; padding: 10px; top: 10vh; right: 15vw; z-index: 1000; width: 440px; height: auto; }
+                    .custom-close-button { right: 0; top: 0; }
+                </style>
+            `;
+            if (jQuery('.troops-counter-content').length > 0) {
+                UI.ErrorMessage('Troops Counter is already loaded!');
+            } else {
+                var troopsCounterContent = document.createElement('div');
+                troopsCounterContent.classList.add('troops-counter-content');
+                troopsCounterContent.innerHTML = docSource;
+                jQuery('body').append(troopsCounterContent);
+                jQuery('.troops-counter-content').draggable({ cancel: '.not-draggable' });
+            }
         } else {
-            var troopsCounterContent = document.createElement('div');
-            troopsCounterContent.classList.add('troops-counter-content');
-            troopsCounterContent.innerHTML = docSource;
-            jQuery('body').append(troopsCounterContent);
-            jQuery('.troops-counter-content').draggable({
-                cancel: '.not-draggable',
-            });
+            const popupContent = preparePopupContent(docSource, '440px');
+            Dialog.show('content', popupContent);
         }
-    } else {
-        const popupContent = preparePopupContent(docSource, '440px');
-        Dialog.show('content', popupContent);
     }
-}
 
     if (game_data.features.Premium.active) {
         fnExecuteScript();
