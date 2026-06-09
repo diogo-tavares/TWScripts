@@ -1,6 +1,6 @@
 (function(window) {
     var strVersion = 'v8.6';
-    var unitDesc = { spear: 'Spear fighters', sword: 'Swordsmen', axe: 'Axemen', archer: 'Archers', spy: 'Scouts', light: 'Light cavalry', marcher: 'Mounted archers', heavy: 'Heavy cavalry', ram: 'Rams', catapult: 'Catapults', knight: 'Paladin', snob: 'Noblemen', militia: 'Militia', offense: 'Offensive', defense: 'Defensive' };
+    var unitDesc = { spear: 'Spear fighters', sword: 'Swordsmen', axe: 'Axemen', archer: 'Archers', spy: 'Scouts', light: 'Light cavalry', marcher: 'Mounted archers', heavy: 'Heavy cavalry', ram: 'Rams', catapult: 'Catapults', knight: 'Paladin', snob: 'Noblemen', offense: 'Offensive', defense: 'Defensive' };
 
     window.fnExecuteScript = function() {
         if (checkScreen('overview_villages', 'units')) {
@@ -14,11 +14,9 @@
     function fnAjaxRequest(u, m, p, t) { var r = null; $.ajax({ async: false, url: u, data: p, dataType: t, type: String(m || 'GET').toUpperCase(), success: function(d) { r = d; } }); return r; }
     function fnCreateUnitConfig() { return $(fnAjaxRequest('/interface.php', 'GET', { func: 'get_unit_info' }, 'xml')).find('config'); }
     function fnHasArchers() { return game_data.units.includes('archer'); }
-    function fnHasMilitia() { return game_data.units.includes('militia'); }
     function formatAsNumber(n) { return parseInt(n).toLocaleString('de'); }
     function preparePopupContent(b, w) { return '<div class="ra-body" style="max-width: ' + w + '">' + b + '</div>'; }
     
-    // Títulos atualizados para Atack em vez de Nukes
     function fnTranslate(id) { 
         var t = { en: ['Full Train Nukes','Full Defense Trains','Other Nobles','Full Atack','3/4 Atack','1/2 Atack','1/4 Atack','Catapult Nukes','Full Defense','3/4 Defense','1/2 Defense','1/4 Defense','Full Scouts','3/4 Scouts','1/2 Scouts','1/4 Scouts','Other','Troops Counter','Noble Armies','Offensive Armies','Defensive Armies','Scout Armies','Other Armies','Offensive Units','Defensive Units','Other Units','Total Units','Co-ordinates'] }; 
         var l = (typeof t[game_data.market] == 'undefined') ? 'en' : game_data.market; 
@@ -44,14 +42,9 @@
         return i;
     }
 
-    window.clickDraggableEl = function() {
-        jQuery('.troops-counter-content').remove();
-    };
-
     function fnCalculateTroopCount() {
         var unitConfig = fnCreateUnitConfig();
         
-        // Grupos de exércitos limpos (removidos Nobles, Scouts e Cat Nukes)
         var outputSummary = { 
             'Full Atack': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 20000 }], descID: 3 }, 
             'Semi Atack': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 15000, maxpop: 20000 }], descID: 4 }, 
@@ -66,20 +59,37 @@
         
         var villageTroops = fnGetTroopCount();
         var summary = { unitTotal: { tally: 0, population: 0 }, defense: { tally: 0, count: 0, population: 0, coords: [] }, offense: { tally: 0, count: 0, population: 0, coords: [] } };
-        $(unitConfig).children().each(function(i, e) { summary[e.nodeName] = { tally: 0, count: 0, population: 0, coords: [] }; });
+        
+        $(unitConfig).children().each(function(i, e) { 
+            if (e.nodeName !== 'militia') {
+                summary[e.nodeName] = { tally: 0, count: 0, population: 0, coords: [] }; 
+            }
+        });
+        
         for (var item in outputSummary) { summary[item] = { tally: 0, count: 0, population: 0, coords: [] }; }
-        var defense = ['spear', 'sword', 'heavy', 'catapult']; var offense = ['axe', 'light', 'ram', 'catapult'];
+        
+        // Defesa sem catapultas
+        var defense = ['spear', 'sword', 'heavy']; 
+        var offense = ['axe', 'light', 'ram', 'catapult'];
         if(fnHasArchers()){ defense.push('archer'); offense.push('marcher'); }
-        if(fnHasMilitia()){ defense.push('militia'); }
         
         villageTroops.forEach(village => {
             var total = { defense: { count: 0, population: 0 }, offense: { count: 0, population: 0 } };
             var index = 0;
             $(unitConfig).children().each(function(i, e) {
-                var unit = e.nodeName; var pop = parseInt($(e).find('pop').text(), 10);
-                var count = village.troops[index];
-                if(new RegExp('^(' + defense.join('|') + ')$').test(unit)) { total.defense.count += count; total.defense.population += count * pop; }
-                if(new RegExp('^(' + offense.join('|') + ')$').test(unit)) { total.offense.count += count; total.offense.population += count * pop; }
+                var unit = e.nodeName; 
+                var pop = parseInt($(e).find('pop').text(), 10);
+                var count = isNaN(village.troops[index]) ? 0 : village.troops[index];
+
+                if (unit !== 'militia') {
+                    summary[unit].count += count;
+                    summary[unit].population += (count * pop);
+                    summary.unitTotal.tally += count;
+                    summary.unitTotal.population += (count * pop);
+
+                    if(new RegExp('^(' + defense.join('|') + ')$').test(unit)) { total.defense.count += count; total.defense.population += count * pop; }
+                    if(new RegExp('^(' + offense.join('|') + ')$').test(unit)) { total.offense.count += count; total.offense.population += count * pop; }
+                }
                 index++;
             });
             for (var item in outputSummary) {
@@ -104,7 +114,7 @@
         }
 
         var totalTroops = summary.unitTotal.population;
-        var intPlayerPoints = parseInt(game_data.player.points);
+        var intPlayerPoints = parseInt(String(game_data.player.points).replace(/[\.,]/g, ''), 10) || 0;
         var troopsToPointsRatio = (intPlayerPoints !== 0) ? (totalTroops / intPlayerPoints).toFixed(2) : "0.00";
         var playerName = game_data.player.name;
         var playerId = game_data.player.id;
@@ -119,7 +129,6 @@
         var serverDateTime = '<b>Server Time:</b> ' + serverTime + ' ' + serverDate + '<br><hr>';
         var currentGroup = '<b>Current Group:</b> ' + currentGroupValue + '<br>';
 
-        // Títulos mapeados manualmente para evitar bugs
         var groupNames = {
             'Offensive': fnTranslate(19),
             'Defensive': fnTranslate(20),
@@ -133,9 +142,10 @@
         docSource += showTroopsPointRatio;
         docSource += currentGroup;
         docSource += serverDateTime;
-        docSource += '<table class="not-draggable">';
-        docSource += '<tr><td width="450" valign="top"><table class="vis" width="100%">';
+        docSource += '<table class="not-draggable" width="100%">';
         
+        // COLUNA ESQUERDA
+        docSource += '<tr><td width="50%" valign="top"><table class="vis" width="100%">';
         for (var item in groupSummary) {
             if (groupSummary.hasOwnProperty(item)) {
                 var count = 0;
@@ -143,14 +153,21 @@
                 for (var jj = 0; jj < groupSummary[item].length; jj++) {
                     docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '">';
                     docSource += '<td width="240" style="white-space:nowrap;"><a href="#" onclick="window.fnShowCoords(\'' + groupSummary[item][jj] + '\',\'' + fnTranslate(outputSummary[groupSummary[item][jj]].descID) + '\'); return false;" title="' + fnCriteriaToStr(outputSummary[groupSummary[item][jj]].criteria) + '">&raquo;&nbsp; ' + fnTranslate(outputSummary[groupSummary[item][jj]].descID) + '</a></td>';
-                    docSource += '<td width="240"' + (summary[groupSummary[item][jj]].tally > 0 ? '' : ' class="hidden"') + ' style="text-align:right;"><span>' + summary[groupSummary[item][jj]].tally + '</span></td>';
+                    docSource += '<td width="100"' + (summary[groupSummary[item][jj]].tally > 0 ? '' : ' class="hidden"') + ' style="text-align:right;"><span>' + summary[groupSummary[item][jj]].tally + '</span></td>';
                     docSource += '</tr>';
                 }
             }
         }
+        docSource += '</table><br>';
+        
+        /* Total Units Table (Fundo da Coluna Esquerda) */
+        docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(26) + '</th></tr>';
+        docSource += '<tr class="row_a"><td><span>Count:</span></td><td style="white-space:nowrap; text-align:right;"><span> ' + formatAsNumber(summary.unitTotal.tally) + '</span></td></tr>';
+        docSource += '<tr class="row_b"><td><span>Pop:</span></td><td style="white-space:nowrap; text-align:right;"><span> ' + formatAsNumber(summary.unitTotal.population) + '</span></td></tr>';
         docSource += '</table></td>';
-        docSource += '<td valign="top">';
 
+        // COLUNA DIREITA
+        docSource += '<td width="50%" valign="top">';
         /* Offensive Units Table */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(23) + '</th></tr>';
         var count = 0;
@@ -171,18 +188,12 @@
         }
         docSource += '</table>';
 
-        /* Total Units Table (Movido para baixo da Defesa) */
-        docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(26) + '</th></tr>';
-        docSource += '<tr class="row_a"><td><span>Count:</span></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary.unitTotal.tally) + '</span></td></tr>';
-        docSource += '<tr class="row_b"><td><span>Pop:</span></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary.unitTotal.population) + '</span></td></tr>';
-        docSource += '</table>';
-
         /* Other Units Table */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(25) + '</th></tr>';
         var count = 0;
         $(unitConfig).children().each(function (i, e) {
             var unit = e.nodeName;
-            if (!new RegExp('^(' + defense.join('|') + '|' + offense.join('|') + ')$').test(unit)) {
+            if (unit !== 'militia' && !new RegExp('^(' + defense.join('|') + '|' + offense.join('|') + ')$').test(unit)) {
                 docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + unit + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[unit].count) + ' ' + unitDesc[unit] + '</span></td></tr>';
             }
         });
