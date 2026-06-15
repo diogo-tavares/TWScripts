@@ -1,5 +1,5 @@
 (function(window) {
-    var strVersion = 'v8.6 (Fixed)';
+    var strVersion = 'v8.6 (Custom)';
     var unitDesc = { spear: 'Spear fighters', sword: 'Swordsmen', axe: 'Axemen', archer: 'Archers', spy: 'Scouts', light: 'Light cavalry', marcher: 'Mounted archers', heavy: 'Heavy cavalry', ram: 'Rams', catapult: 'Catapults', knight: 'Paladin', snob: 'Noblemen', offense: 'Offensive', defense: 'Defensive' };
 
     window.fnExecuteScript = function() {
@@ -25,69 +25,40 @@
     
     function fnCriteriaToStr(c) { var s = ''; c.forEach(x => { if(x.minpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] >= '+x.minpop+')'; if(x.maxpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] < '+x.maxpop+')'; }); return s; }
 
-    // Motor de contagem totalmente novo e preciso
+    // --- MOTOR DE CONTAGEM ORIGINAL RESTAURADO ---
     function fnGetTroopCount() {
+        var gameVersion = parseFloat(game_data.version.split(' ')[1].replace('release_', ''));
+        var colCount = $('#units_table ' + (gameVersion >= 7.1 ? 'thead' : 'tbody:eq(0)') + ' th').length - 2;
         var villageTroopInfo = [];
-        $('#units_table tbody').each(function() {
-            var $tbody = $(this);
-            var d = { troops: new Array(20).fill(0), coords: "0|0" };
-            var foundCoords = false;
-            
-            var validRows = [];
-            $tbody.find('tr').each(function() {
-                var $tr = $(this);
-                // Ignorar cabeçalhos e linhas de total adicionadas por outros scripts
-                if ($tr.find('th').length > 0 || $tr.hasClass('units_away')) return;
-                validRows.push($tr);
-            });
 
-            if (validRows.length === 0) return;
+        $('#units_table > tbody').each(function (row) {
+            $(this).find('tr:last').remove();
+        });
 
-            // Extrair coordenadas da primeira linha
-            var coordMatch = validRows[0].find('td:first').text().match(/(\d+)\|(\d+)/g);
-            if (coordMatch) {
-                d.coords = coordMatch[coordMatch.length - 1];
-                foundCoords = true;
-            }
+        $('#units_table tbody' + (gameVersion < 7.1 ? ':gt(0)' : '')).each(function (row, eleRow) {
+            var villageData = { troops: new Array(20).fill(0) }; // Expandi o array para segurança
 
-            validRows.forEach(function($tr, rowIndex) {
-                // Linha 1 no jogo é a linha "Na aldeia" (soma de tropas tuas + apoios). 
-                // Ignoramos para não contar as tropas a dobrar.
-                if (validRows.length > 1 && rowIndex === 1) return;
+            var coords = $(eleRow).find('td:eq(0)').text().match(/\d+\|\d+/g);
+            coords = coords ? coords[coords.length - 1].match(/(\d+)\|(\d+)/) : null;
+            if (coords) {
+                villageData.x = parseInt(coords[1], 10);
+                villageData.y = parseInt(coords[2], 10);
+                villageData.coords = coords[0];
 
-                var unitValues = [];
-                $tr.find('td').each(function() {
-                    var $td = $(this);
-                    // Ignora se for a célula do nome da aldeia ou de ações (têm links ou rowspan)
-                    if ($td.find('a').length > 0 || $td.attr('rowspan')) return;
-                    
-                    var text = $td.text().trim();
-                    // Limpar spans escondidos que o jogo usa para organizar tabelas
-                    if ($td.find('.hidden').length > 0) {
-                        text = $td.text().replace($td.find('.hidden').text(), '').trim();
-                    }
-                    
-                    var val = parseInt(text.replace(/[\.,]/g, ''), 10);
-                    
-                    if (!isNaN(val)) {
-                        unitValues.push(val);
-                    } else if (text === '' || text === '0') {
-                        unitValues.push(0);
+                $(eleRow).find('td:gt(0):not(:has(>a))').each(function (cell, eleCell) {
+                    if (cell % colCount) {
+                        if (Math.floor(cell / colCount) != 1) { // Ignora as tropas na aldeia para não duplicar
+                            villageData.troops[(cell % colCount) - 1] += parseInt($(eleCell).text() || '0', 10);
+                        }
                     }
                 });
-
-                // Adiciona ao total da aldeia
-                for (var j = 0; j < unitValues.length; j++) {
-                    if (unitValues[j] > 0) d.troops[j] += unitValues[j];
-                }
-            });
-            
-            if (foundCoords) {
-                villageTroopInfo.push(d);
+                villageTroopInfo.push(villageData);
             }
         });
+
         return villageTroopInfo;
     }
+    // ---------------------------------------------
 
     function fnCalculateTroopCount() {
         var unitConfig = fnCreateUnitConfig();
@@ -107,7 +78,7 @@
         var villageTroops = fnGetTroopCount();
         var summary = { unitTotal: { tally: 0, population: 0 }, defense: { tally: 0, count: 0, population: 0, coords: [] }, offense: { tally: 0, count: 0, population: 0, coords: [] } };
         
-        // Ignora a Milícia
+        // Inicializa objectos ignorando a milícia
         $(unitConfig).children().each(function(i, e) { 
             if (e.nodeName !== 'militia') {
                 summary[e.nodeName] = { tally: 0, count: 0, population: 0, coords: [] }; 
@@ -116,48 +87,92 @@
         
         for (var item in outputSummary) { summary[item] = { tally: 0, count: 0, population: 0, coords: [] }; }
         
-        // Catapultas removidas da Defesa
+        // Defesa sem catapultas
         var defense = ['spear', 'sword', 'heavy']; 
         var offense = ['axe', 'light', 'ram', 'catapult'];
         if(fnHasArchers()){ defense.push('archer'); offense.push('marcher'); }
         
-        villageTroops.forEach(village => {
-            var total = { defense: { count: 0, population: 0 }, offense: { count: 0, population: 0 } };
+        // --- LOOP ORIGINAL DE CÁLCULO DE SOMAS ---
+        for (var ii = 0; ii < villageTroops.length; ii++) {
+            var village = villageTroops[ii];
+            var total = {
+                defense: { tally: 0, count: 0, population: 0, coords: [] },
+                offense: { tally: 0, count: 0, population: 0, coords: [] },
+            };
+
+            $(unitConfig).children().each(function (i, e) {
+                total[e.nodeName] = { tally: 0, count: 0, population: 0, coords: [] };
+            });
+
             var index = 0;
-            $(unitConfig).children().each(function(i, e) {
-                var unit = e.nodeName; 
+            $(unitConfig).children().each(function (i, e) {
+                var unit = e.nodeName;
                 var pop = parseInt($(e).find('pop').text(), 10);
                 var count = isNaN(village.troops[index]) ? 0 : village.troops[index];
 
-                if (unit !== 'militia') {
-                    summary[unit].count += count;
-                    summary[unit].population += (count * pop);
-                    summary.unitTotal.tally += count;
-                    summary.unitTotal.population += (count * pop);
+                total[unit].count += count;
+                total[unit].population += count * pop;
 
-                    if(new RegExp('^(' + defense.join('|') + ')$').test(unit)) { total.defense.count += count; total.defense.population += count * pop; }
-                    if(new RegExp('^(' + offense.join('|') + ')$').test(unit)) { total.offense.count += count; total.offense.population += count * pop; }
+                /* Defense */
+                if (new RegExp('^(' + defense.join('|') + ')$').test(unit)) {
+                    total.defense.count += total[unit].count;
+                    total.defense.population += total[unit].population;
+                }
+
+                /* Offense */
+                if (new RegExp('^(' + offense.join('|') + ')$').test(unit)) {
+                    total.offense.count += total[unit].count;
+                    total.offense.population += total[unit].population;
+                }
+
+                /* Units (Ignorando Milícia globalmente) */
+                if (unit !== 'militia') {
+                    summary[unit].count += total[unit].count;
+                    summary[unit].population += total[unit].population;
+
+                    /* All Units */
+                    summary.unitTotal.tally += total[unit].count;
+                    summary.unitTotal.population += total[unit].population;
                 }
                 index++;
             });
-            for (var item in outputSummary) {
-                var isValid = true;
-                outputSummary[item].criteria.forEach(c => {
-                    var val = (c.unit === 'defense') ? total.defense.population : (c.unit === 'offense') ? total.offense.population : 0;
-                    if(c.minpop && val < c.minpop) isValid = false;
-                    if(c.maxpop && val >= c.maxpop) isValid = false;
-                });
-                if(isValid) { summary[item].coords.push(village.coords); summary[item].tally++; }
+
+            summary.defense.count += total.defense.count;
+            summary.defense.population += total.defense.population;
+            summary.offense.count += total.offense.count;
+            summary.offense.population += total.offense.population;
+
+            for (var itemKey in outputSummary) {
+                if (outputSummary.hasOwnProperty(itemKey)) {
+                    var isValid = true;
+                    for (var jj = 0; jj < outputSummary[itemKey].criteria.length; jj++) {
+                        var criteria = outputSummary[itemKey].criteria[jj];
+                        var tPop = total[criteria.unit].population;
+
+                        if (!(typeof criteria.minpop == 'undefined' || !criteria.minpop || tPop >= criteria.minpop)) {
+                            isValid = false;
+                        }
+                        if (!(typeof criteria.maxpop == 'undefined' || !criteria.maxpop || tPop < criteria.maxpop)) {
+                            isValid = false;
+                        }
+                    }
+
+                    if (isValid) {
+                        summary[itemKey].coords.push(village.coords);
+                        summary[itemKey].tally++;
+                    }
+                }
             }
-        });
+        }
+        // -----------------------------------------
 
         var groupSummary = {};
-        for (var item in outputSummary) {
-            if (outputSummary.hasOwnProperty(item)) {
-                if (typeof groupSummary[outputSummary[item].group] == 'undefined') {
-                    groupSummary[outputSummary[item].group] = [];
+        for (var gItem in outputSummary) {
+            if (outputSummary.hasOwnProperty(gItem)) {
+                if (typeof groupSummary[outputSummary[gItem].group] == 'undefined') {
+                    groupSummary[outputSummary[gItem].group] = [];
                 }
-                groupSummary[outputSummary[item].group].push(item);
+                groupSummary[outputSummary[gItem].group].push(gItem);
             }
         }
 
@@ -169,7 +184,7 @@
         var serverTime = jQuery('#serverTime').text();
         var serverDate = jQuery('#serverDate').text();
         
-        // Remove os >< e limpa o nome do grupo
+        // Remove os >< e os parentesis rectos do nome do grupo
         var currentGroupValue = jQuery('#paged_view_content .vis_item > strong').text().replace(/[><\[\]]/g, '').trim();
 
         var showPlayer = '<b>Player:</b> <a href="/game.php?screen=info_player&id=' + playerId + '" target="_blank">' + playerName + '</a><br>';
@@ -194,14 +209,15 @@
         
         // COLUNA ESQUERDA
         docSource += '<tr><td width="50%" valign="top"><table class="vis" width="100%">';
-        for (var item in groupSummary) {
-            if (groupSummary.hasOwnProperty(item)) {
-                var count = 0;
-                docSource += '<tr><th colspan="2">' + groupNames[item] + '</th></tr>';
-                for (var jj = 0; jj < groupSummary[item].length; jj++) {
-                    docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '">';
-                    docSource += '<td width="240" style="white-space:nowrap;"><a href="#" onclick="window.fnShowCoords(\'' + groupSummary[item][jj] + '\',\'' + fnTranslate(outputSummary[groupSummary[item][jj]].descID) + '\'); return false;" title="' + fnCriteriaToStr(outputSummary[groupSummary[item][jj]].criteria) + '">&raquo;&nbsp; ' + fnTranslate(outputSummary[groupSummary[item][jj]].descID) + '</a></td>';
-                    docSource += '<td width="100"' + (summary[groupSummary[item][jj]].tally > 0 ? '' : ' class="hidden"') + ' style="text-align:right;"><span>' + summary[groupSummary[item][jj]].tally + '</span></td>';
+        for (var listGroup in groupSummary) {
+            if (groupSummary.hasOwnProperty(listGroup)) {
+                var rowCount = 0;
+                docSource += '<tr><th colspan="2">' + groupNames[listGroup] + '</th></tr>';
+                for (var jj = 0; jj < groupSummary[listGroup].length; jj++) {
+                    var lineItem = groupSummary[listGroup][jj];
+                    docSource += '<tr class="' + (rowCount++ % 2 ? 'row_b' : 'row_a') + '">';
+                    docSource += '<td width="240" style="white-space:nowrap;"><a href="#" onclick="window.fnShowCoords(\'' + lineItem + '\',\'' + fnTranslate(outputSummary[lineItem].descID) + '\'); return false;" title="' + fnCriteriaToStr(outputSummary[lineItem].criteria) + '">&raquo;&nbsp; ' + fnTranslate(outputSummary[lineItem].descID) + '</a></td>';
+                    docSource += '<td width="100"' + (summary[lineItem].tally > 0 ? '' : ' class="hidden"') + ' style="text-align:right;"><span>' + summary[lineItem].tally + '</span></td>';
                     docSource += '</tr>';
                 }
             }
@@ -218,31 +234,31 @@
         docSource += '<td width="50%" valign="top">';
         /* Offensive Units Table */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(23) + '</th></tr>';
-        var count = 0;
-        for (var key in offense) {
-            if (offense.hasOwnProperty(key)) {
-                docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + offense[key] + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[offense[key]].count) + ' ' + unitDesc[offense[key]] + '</span></td></tr>';
+        var offCount = 0;
+        for (var keyOff in offense) {
+            if (offense.hasOwnProperty(keyOff)) {
+                docSource += '<tr class="' + (offCount++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + offense[keyOff] + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[offense[keyOff]].count) + ' ' + unitDesc[offense[keyOff]] + '</span></td></tr>';
             }
         }
         docSource += '</table>';
 
         /* Defensive Units Table */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(24) + '</th></tr>';
-        var count = 0;
-        for (var key in defense) {
-            if (defense.hasOwnProperty(key)) {
-                docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + defense[key] + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[defense[key]].count) + ' ' + unitDesc[defense[key]] + '</span></td></tr>';
+        var defCount = 0;
+        for (var keyDef in defense) {
+            if (defense.hasOwnProperty(keyDef)) {
+                docSource += '<tr class="' + (defCount++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + defense[keyDef] + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[defense[keyDef]].count) + ' ' + unitDesc[defense[keyDef]] + '</span></td></tr>';
             }
         }
         docSource += '</table>';
 
         /* Other Units Table */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(25) + '</th></tr>';
-        var count = 0;
+        var othCount = 0;
         $(unitConfig).children().each(function (i, e) {
             var unit = e.nodeName;
             if (unit !== 'militia' && !new RegExp('^(' + defense.join('|') + '|' + offense.join('|') + ')$').test(unit)) {
-                docSource += '<tr class="' + (count++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + unit + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[unit].count) + ' ' + unitDesc[unit] + '</span></td></tr>';
+                docSource += '<tr class="' + (othCount++ % 2 ? 'row_b' : 'row_a') + '"><td><img src="https://' + location.hostname + '/graphic/unit/unit_' + unit + '.png?1" alt=""/></td><td style="white-space:nowrap;"><span> ' + formatAsNumber(summary[unit].count) + ' ' + unitDesc[unit] + '</span></td></tr>';
             }
         });
         docSource += '</table></td></tr></table><br>';
@@ -251,9 +267,9 @@
         docSource += '<script type="text/javascript">';
         docSource += 'window.fnShowCoords = function(id, description) { ';
         docSource += 'var coords = {};';
-        for (var item in outputSummary) {
-            if (outputSummary.hasOwnProperty(item) && summary[item].coords.length) {
-                docSource += 'coords["' + item + '"] = "' + summary[item].coords.join(' ') + '";';
+        for (var sItem in outputSummary) {
+            if (outputSummary.hasOwnProperty(sItem) && summary[sItem].coords.length) {
+                docSource += 'coords["' + sItem + '"] = "' + summary[sItem].coords.join(' ') + '";';
             }
         }
         docSource += 'document.getElementById("coords_group").innerHTML = description;';
@@ -270,6 +286,10 @@
 
         Dialog.show('content', preparePopupContent(docSource, '720px'));
     }
+
+    window.clickDraggableEl = function() {
+        jQuery('.troops-counter-content').remove();
+    };
 
     if (game_data.features.Premium.active) {
         fnExecuteScript();
