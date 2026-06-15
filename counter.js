@@ -1,5 +1,5 @@
 (function(window) {
-    var strVersion = 'v8.6 (Final)';
+    var strVersion = 'v8.6 (Ultimate)';
     var unitDesc = { spear: 'Spear fighters', sword: 'Swordsmen', axe: 'Axemen', archer: 'Archers', spy: 'Scouts', light: 'Light cavalry', marcher: 'Mounted archers', heavy: 'Heavy cavalry', ram: 'Rams', catapult: 'Catapults', knight: 'Paladin', snob: 'Noblemen', offense: 'Offensive', defense: 'Defensive' };
 
     window.fnExecuteScript = function() {
@@ -25,49 +25,49 @@
     
     function fnCriteriaToStr(c) { var s = ''; c.forEach(x => { if(x.minpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] >= '+x.minpop+')'; if(x.maxpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] < '+x.maxpop+')'; }); return s; }
 
+    // NOVO MOTOR DE CONTAGEM: Lê diretamente a linha de "Total" sem apagar nada
     function fnGetTroopCount() {
-        var gameVersion = parseFloat(game_data.version.split(' ')[1].replace('release_', ''));
-        var colCount = $('#units_table ' + (gameVersion >= 7.1 ? 'thead' : 'tbody:eq(0)') + ' th').length - 2;
         var villageTroopInfo = [];
+        var unitConfig = fnCreateUnitConfig();
+        var numUnits = $(unitConfig).children().length;
 
-        $('#units_table tbody' + (gameVersion < 7.1 ? ':gt(0)' : '')).each(function (row, eleTbody) {
-            var $rows = $(eleTbody).find('tr');
-            var rowCount = $rows.length;
+        $('#units_table tbody').each(function () {
+            var $rows = $(this).find('tr');
+            if ($rows.length === 0 || $rows.find('th').length > 0) return; // Ignora cabeçalhos
 
-            $rows.each(function (rowIndex, eleRow) {
-                // IGNORAR A ÚLTIMA LINHA (A linha de "Total") PARA EVITAR BUGS
-                if (rowIndex === rowCount - 1) return;
+            var $firstCell = $rows.first().find('td:first');
+            var coordsMatch = $firstCell.text().match(/\d+\|\d+/g);
+            var coords = coordsMatch ? coordsMatch[coordsMatch.length - 1].match(/(\d+)\|(\d+)/) : null;
 
-                var villageData = { troops: new Array(20).fill(0) };
-                var $firstCell = $(eleRow).find('td:eq(0)');
-
-                var coords = $firstCell.text().match(/\d+\|\d+/g);
-                coords = coords ? coords[coords.length - 1].match(/(\d+)\|(\d+)/) : null;
+            if (coords) {
+                var villageData = { troops: new Array(numUnits).fill(0), coords: coords[0] };
+                villageData.x = parseInt(coords[1], 10);
+                villageData.y = parseInt(coords[2], 10);
                 
-                if (coords) {
-                    villageData.x = parseInt(coords[1], 10);
-                    villageData.y = parseInt(coords[2], 10);
-                    villageData.coords = coords[0];
-                    
-                    // Extrair ID da Aldeia e construir link direto para a Praça de Reuniões
-                    var $link = $firstCell.find('a:first');
-                    var rawUrl = $link.attr('href') || '#';
-                    var vMatch = rawUrl.match(/village=(\d+)/);
-                    var vId = vMatch ? vMatch[1] : '';
-                    
-                    villageData.url = vId ? ('/game.php?village=' + vId + '&screen=place') : rawUrl;
-                    villageData.name = $link.text().trim() || villageData.coords;
+                // Link direto para a Praça de Reuniões
+                var $link = $firstCell.find('a:first');
+                var rawUrl = $link.attr('href') || '#';
+                var vMatch = rawUrl.match(/village=(\d+)/);
+                var vId = vMatch ? vMatch[1] : '';
+                villageData.url = vId ? ('/game.php?village=' + vId + '&screen=place') : rawUrl;
+                villageData.name = $link.text().trim() || villageData.coords;
 
-                    $(eleRow).find('td:gt(0):not(:has(>a))').each(function (cell, eleCell) {
-                        if (cell % colCount) {
-                            if (Math.floor(cell / colCount) != 1) {
-                                villageData.troops[(cell % colCount) - 1] += parseInt($(eleCell).text() || '0', 10);
-                            }
+                // Lê os números da última linha do grupo (que é sempre o Total da aldeia)
+                var $totalRow = $rows.last();
+                
+                $totalRow.find('td:gt(0)').each(function(tdIndex) {
+                    if (tdIndex < numUnits) {
+                        var textVal = $(this).text().replace(/[\.,]/g, '').trim();
+                        if ($(this).find('.hidden').length > 0) {
+                            textVal = $(this).text().replace($(this).find('.hidden').text(), '').replace(/[\.,]/g, '').trim();
                         }
-                    });
-                    villageTroopInfo.push(villageData);
-                }
-            });
+                        var val = parseInt(textVal, 10);
+                        villageData.troops[tdIndex] = isNaN(val) ? 0 : val;
+                    }
+                });
+
+                villageTroopInfo.push(villageData);
+            }
         });
 
         return villageTroopInfo;
@@ -215,7 +215,6 @@
         docSource += serverDateTime;
         docSource += '<table class="not-draggable" width="100%">';
         
-        // COLUNA ESQUERDA
         docSource += '<tr><td width="50%" valign="top"><table class="vis" width="100%">';
         for (var listGroup in groupSummary) {
             if (groupSummary.hasOwnProperty(listGroup)) {
@@ -232,15 +231,12 @@
         }
         docSource += '</table><br>';
         
-        /* Total Units Table */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(26) + '</th></tr>';
         docSource += '<tr class="row_a"><td><span>Count:</span></td><td style="white-space:nowrap; text-align:right;"><span> ' + formatAsNumber(summary.unitTotal.tally) + '</span></td></tr>';
         docSource += '<tr class="row_b"><td><span>Pop:</span></td><td style="white-space:nowrap; text-align:right;"><span> ' + formatAsNumber(summary.unitTotal.population) + '</span></td></tr>';
         docSource += '</table></td>';
 
-        // COLUNA DIREITA
         docSource += '<td width="50%" valign="top">';
-        /* Offensive Units Table */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(23) + '</th></tr>';
         var offCount = 0;
         for (var keyOff in offense) {
@@ -250,7 +246,6 @@
         }
         docSource += '</table>';
 
-        /* Defensive Units Table */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(24) + '</th></tr>';
         var defCount = 0;
         for (var keyDef in defense) {
@@ -260,7 +255,6 @@
         }
         docSource += '</table>';
 
-        /* Other Units Table */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(25) + '</th></tr>';
         var othCount = 0;
         $(unitConfig).children().each(function (i, e) {
@@ -271,7 +265,6 @@
         });
         docSource += '</table></td></tr></table><br>';
 
-        /* Lógica e Interface da Lista de Aldeias Clicáveis */
         var villageDataJson = {};
         for (var sItem in outputSummary) {
             if (outputSummary.hasOwnProperty(sItem) && summary[sItem].coords.length) {
@@ -303,6 +296,10 @@
 
         Dialog.show('content', preparePopupContent(docSource, '720px'));
     }
+
+    window.clickDraggableEl = function() {
+        jQuery('.troops-counter-content').remove();
+    };
 
     if (game_data.features.Premium.active) {
         fnExecuteScript();
