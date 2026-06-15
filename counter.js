@@ -1,12 +1,13 @@
 (function(window) {
-    var strVersion = 'v8.6 (Custom)';
+    var strVersion = 'v8.6 (Custom Fixed)';
     var unitDesc = { spear: 'Spear fighters', sword: 'Swordsmen', axe: 'Axemen', archer: 'Archers', spy: 'Scouts', light: 'Light cavalry', marcher: 'Mounted archers', heavy: 'Heavy cavalry', ram: 'Rams', catapult: 'Catapults', knight: 'Paladin', snob: 'Noblemen', offense: 'Offensive', defense: 'Defensive' };
 
     window.fnExecuteScript = function() {
         if (checkScreen('overview_villages', 'units')) {
             fnCalculateTroopCount();
         } else {
-            UI.ErrorMessage('Script must be run from <a href="/game.php?screen=overview_villages&mode=units" class="btn">Troops Overview</a>', 5000);
+            // Se não estiver na página correta, redireciona automaticamente o jogador
+            window.location.href = '/game.php?screen=overview_villages&mode=units';
         }
     };
 
@@ -25,18 +26,21 @@
     
     function fnCriteriaToStr(c) { var s = ''; c.forEach(x => { if(x.minpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] >= '+x.minpop+')'; if(x.maxpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] < '+x.maxpop+')'; }); return s; }
 
-    // --- MOTOR DE CONTAGEM ORIGINAL RESTAURADO ---
+    // Motor de contagem corrigido com Clonagem de DOM (Evita a destruição das linhas do jogo)
     function fnGetTroopCount() {
         var gameVersion = parseFloat(game_data.version.split(' ')[1].replace('release_', ''));
         var colCount = $('#units_table ' + (gameVersion >= 7.1 ? 'thead' : 'tbody:eq(0)') + ' th').length - 2;
         var villageTroopInfo = [];
 
-        $('#units_table > tbody').each(function (row) {
+        // CLONAGEM AQUÍ: Toda a manipulação de tabelas passa a ser feita na memória volatil
+        var $tableClone = $('#units_table').clone();
+
+        $tableClone.find('> tbody').each(function (row) {
             $(this).find('tr:last').remove();
         });
 
-        $('#units_table tbody' + (gameVersion < 7.1 ? ':gt(0)' : '')).each(function (row, eleRow) {
-            var villageData = { troops: new Array(20).fill(0) }; // Expandi o array para segurança
+        $tableClone.find('tbody' + (gameVersion < 7.1 ? ':gt(0)' : '')).each(function (row, eleRow) {
+            var villageData = { troops: new Array(20).fill(0) };
 
             var coords = $(eleRow).find('td:eq(0)').text().match(/\d+\|\d+/g);
             coords = coords ? coords[coords.length - 1].match(/(\d+)\|(\d+)/) : null;
@@ -47,7 +51,7 @@
 
                 $(eleRow).find('td:gt(0):not(:has(>a))').each(function (cell, eleCell) {
                     if (cell % colCount) {
-                        if (Math.floor(cell / colCount) != 1) { // Ignora as tropas na aldeia para não duplicar
+                        if (Math.floor(cell / colCount) != 1) {
                             villageData.troops[(cell % colCount) - 1] += parseInt($(eleCell).text() || '0', 10);
                         }
                     }
@@ -58,7 +62,6 @@
 
         return villageTroopInfo;
     }
-    // ---------------------------------------------
 
     function fnCalculateTroopCount() {
         var unitConfig = fnCreateUnitConfig();
@@ -78,7 +81,6 @@
         var villageTroops = fnGetTroopCount();
         var summary = { unitTotal: { tally: 0, population: 0 }, defense: { tally: 0, count: 0, population: 0, coords: [] }, offense: { tally: 0, count: 0, population: 0, coords: [] } };
         
-        // Inicializa objectos ignorando a milícia
         $(unitConfig).children().each(function(i, e) { 
             if (e.nodeName !== 'militia') {
                 summary[e.nodeName] = { tally: 0, count: 0, population: 0, coords: [] }; 
@@ -87,12 +89,10 @@
         
         for (var item in outputSummary) { summary[item] = { tally: 0, count: 0, population: 0, coords: [] }; }
         
-        // Defesa sem catapultas
         var defense = ['spear', 'sword', 'heavy']; 
         var offense = ['axe', 'light', 'ram', 'catapult'];
         if(fnHasArchers()){ defense.push('archer'); offense.push('marcher'); }
         
-        // --- LOOP ORIGINAL DE CÁLCULO DE SOMAS ---
         for (var ii = 0; ii < villageTroops.length; ii++) {
             var village = villageTroops[ii];
             var total = {
@@ -113,24 +113,20 @@
                 total[unit].count += count;
                 total[unit].population += count * pop;
 
-                /* Defense */
                 if (new RegExp('^(' + defense.join('|') + ')$').test(unit)) {
                     total.defense.count += total[unit].count;
                     total.defense.population += total[unit].population;
                 }
 
-                /* Offense */
                 if (new RegExp('^(' + offense.join('|') + ')$').test(unit)) {
                     total.offense.count += total[unit].count;
                     total.offense.population += total[unit].population;
                 }
 
-                /* Units (Ignorando Milícia globalmente) */
                 if (unit !== 'militia') {
                     summary[unit].count += total[unit].count;
                     summary[unit].population += total[unit].population;
 
-                    /* All Units */
                     summary.unitTotal.tally += total[unit].count;
                     summary.unitTotal.population += total[unit].population;
                 }
@@ -164,7 +160,6 @@
                 }
             }
         }
-        // -----------------------------------------
 
         var groupSummary = {};
         for (var gItem in outputSummary) {
@@ -184,7 +179,7 @@
         var serverTime = jQuery('#serverTime').text();
         var serverDate = jQuery('#serverDate').text();
         
-        // Remove os >< e os parentesis rectos do nome do grupo
+        // CORREÇÃO DOS ACENTOS/SINAIS: Limpa os >< e parentesis do nome do grupo do jogador
         var currentGroupValue = jQuery('#paged_view_content .vis_item > strong').text().replace(/[><\[\]]/g, '').trim();
 
         var showPlayer = '<b>Player:</b> <a href="/game.php?screen=info_player&id=' + playerId + '" target="_blank">' + playerName + '</a><br>';
@@ -224,7 +219,7 @@
         }
         docSource += '</table><br>';
         
-        /* Total Units Table (Fundo da Coluna Esquerda) */
+        /* Total Units Table (Fundo da Coluna Esquerda - Correção de Layout) */
         docSource += '<table class="vis" width="100%"><tr><th colspan="2" style="white-space:nowrap;">' + fnTranslate(26) + '</th></tr>';
         docSource += '<tr class="row_a"><td><span>Count:</span></td><td style="white-space:nowrap; text-align:right;"><span> ' + formatAsNumber(summary.unitTotal.tally) + '</span></td></tr>';
         docSource += '<tr class="row_b"><td><span>Pop:</span></td><td style="white-space:nowrap; text-align:right;"><span> ' + formatAsNumber(summary.unitTotal.population) + '</span></td></tr>';
