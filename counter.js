@@ -49,7 +49,7 @@
                 var rawUrl = $link.attr('href') || '#';
                 var vMatch = rawUrl.match(/village=(\d+)/);
                 var vId = vMatch ? vMatch[1] : '';
-                villageData.url = vId ? ('/game.php?village=' + vId + '&screen=place') : rawUrl;
+                villageData.url = vId ? ('/game.php?village=' + vId + '&screen=farm') : rawUrl;
                 villageData.name = $link.text().trim() || villageData.coords;
 
                 // Lê os números da última linha do grupo (que é sempre o Total da aldeia)
