@@ -1,15 +1,16 @@
 (function(window) {
-    var strVersion = 'v1.0 (Gestor de Armazéns)';
+    var strVersion = 'v1.1 (Gestor de Armazéns)';
 
     window.fnExecuteWarehouseScript = function() {
         UI.InfoMessage('A investigar armazéns... aguarde.', 2000);
 
-        // Fazemos um pedido invisível à página de produção (page=-1 garante que lê todas as páginas se houver muitas aldeias)
+        // Fazemos um pedido invisível à página de produção
         $.ajax({
             url: '/game.php?screen=overview_villages&mode=prod&page=-1',
             type: 'GET',
             success: function(data) {
-                var $html = $(data);
+                // Parse seguro do HTML recebido
+                var $html = $($.parseHTML(data));
                 var $prodTable = $html.find('#production_table');
                 
                 if (!$prodTable.length) {
@@ -17,15 +18,30 @@
                     return;
                 }
 
+                // Procurar em que coluna está a madeira (normalmente é a coluna 2 ou 3)
+                var woodIdx = -1;
+                $prodTable.find('tr:first th').each(function(i) {
+                    if ($(this).find('.wood').length > 0 || $(this).find('img[src*="wood"]').length > 0) {
+                        woodIdx = i;
+                    }
+                });
+
+                // Prevenção caso o layout do jogo mude
+                if (woodIdx === -1) woodIdx = 2;
+
                 var villages = [];
 
-                // Percorre todas as aldeias na tabela
-                $prodTable.find('tr.nowrap').each(function() {
+                // Percorrer as linhas das aldeias (ignorando cabeçalhos)
+                $prodTable.find('tr.row_a, tr.row_b').each(function() {
                     var $row = $(this);
+                    var $cells = $row.children('td');
                     
+                    // Se a linha não tiver células suficientes, ignorar
+                    if ($cells.length < woodIdx + 4) return;
+
                     // Encontra o link da aldeia
-                    var $link = $row.find('td:eq(0) span.quickedit-vn a:first');
-                    if (!$link.length) $link = $row.find('td:eq(0) a:first');
+                    var $link = $cells.eq(0).find('span.quickedit-vn a:first');
+                    if (!$link.length) $link = $cells.eq(0).find('a:first');
                     if (!$link.length) return;
 
                     var vName = $link.text().trim();
@@ -34,18 +50,11 @@
                     if (!vMatch) return;
                     var vId = vMatch[1];
 
-                    // Encontra a célula dos recursos
-                    var $resCell = $row.find('.res.wood').closest('td');
-                    if (!$resCell.length) return;
-
-                    // Extrai os recursos (limpando pontos que o jogo usa nos milhares)
-                    var wood = parseInt($resCell.find('.res.wood').text().replace(/\D/g, ''), 10) || 0;
-                    var stone = parseInt($resCell.find('.res.stone').text().replace(/\D/g, ''), 10) || 0;
-                    var iron = parseInt($resCell.find('.res.iron').text().replace(/\D/g, ''), 10) || 0;
-
-                    // O armazém é a célula imediatamente a seguir aos recursos
-                    var $storageCell = $resCell.next('td');
-                    var storage = parseInt($storageCell.text().replace(/\D/g, ''), 10) || 0;
+                    // Ler os recursos usando a ordem certa das colunas (Madeira, Argila, Ferro, Armazém)
+                    var wood = parseInt($cells.eq(woodIdx).text().replace(/\D/g, ''), 10) || 0;
+                    var stone = parseInt($cells.eq(woodIdx + 1).text().replace(/\D/g, ''), 10) || 0;
+                    var iron = parseInt($cells.eq(woodIdx + 2).text().replace(/\D/g, ''), 10) || 0;
+                    var storage = parseInt($cells.eq(woodIdx + 3).text().replace(/\D/g, ''), 10) || 0;
 
                     if (storage > 0) {
                         // Calcula as percentagens arredondadas
@@ -53,7 +62,7 @@
                         var pStone = Math.round((stone / storage) * 100);
                         var pIron = Math.round((iron / storage) * 100);
                         
-                        // Descobre qual é o recurso mais cheio para definir a cor da aldeia
+                        // Qual é a percentagem mais alta para definir a urgência?
                         var maxP = Math.max(pWood, pStone, pIron);
 
                         villages.push({
@@ -67,12 +76,12 @@
                     }
                 });
 
-                // Ordenar as aldeias: as mais cheias ficam no topo
+                // Ordenar: as aldeias mais cheias primeiro
                 villages.sort(function(a, b) {
                     return b.maxP - a.maxP;
                 });
 
-                // Construir a Janela (UI)
+                // Construir e mostrar a Janela (UI)
                 buildUI(villages);
             },
             error: function() {
@@ -86,7 +95,7 @@
         html += '<div class="ra-body" style="max-width: 600px;">';
         html += '<table class="main" width="100%" align="center"><tr><td>';
         html += '<h2>Estado dos Armazéns</h2>';
-        html += '<p style="font-size:11px; margin-top:-5px;">Clica na aldeia para ir diretamente para o seu Mercado. Ocupação arredondada às unidades.</p>';
+        html += '<p style="font-size:11px; margin-top:-5px;">Clica na aldeia para ir diretamente para o seu Mercado.</p>';
         
         html += '<div style="max-height: 400px; overflow-y: auto; border: 1px solid #7d510f;">';
         html += '<table class="vis" width="100%">';
@@ -104,20 +113,21 @@
                 var v = villages[i];
                 var rowClass = (i % 2 === 0) ? 'row_a' : 'row_b';
                 var bgStyle = '';
-                var linkColor = '#005500'; // Cor padrão dos links do jogo
+                var linkColor = '#005500';
 
-                // Regras de cores pedidas
+                // Cores das linhas
                 if (v.maxP >= 80) {
-                    bgStyle = 'background-color: #ffcccc !important;'; // Fundo vermelho claro
-                    linkColor = '#cc0000'; // Link vermelho forte
+                    bgStyle = 'background-color: #ffcccc !important;'; 
+                    linkColor = '#cc0000'; 
                 } else if (v.maxP >= 60) {
-                    bgStyle = 'background-color: #ffffcc !important;'; // Fundo amarelo claro
-                    linkColor = '#a87b00'; // Link amarelo forte/dourado
+                    bgStyle = 'background-color: #ffffcc !important;'; 
+                    linkColor = '#a87b00'; 
                 }
 
+                // O link que leva para o mercado no mesmo separador
                 var marketUrl = '/game.php?village=' + v.id + '&screen=market';
 
-                // Destacar também as percentagens críticas individualmente para facilitar a leitura visual
+                // Destacar os números mais altos a bold e cor
                 var styleW = (v.wood >= 80) ? 'color:#cc0000; font-weight:bold;' : ((v.wood >= 60) ? 'color:#a87b00; font-weight:bold;' : '');
                 var styleS = (v.stone >= 80) ? 'color:#cc0000; font-weight:bold;' : ((v.stone >= 60) ? 'color:#a87b00; font-weight:bold;' : '');
                 var styleI = (v.iron >= 80) ? 'color:#cc0000; font-weight:bold;' : ((v.iron >= 60) ? 'color:#a87b00; font-weight:bold;' : '');
@@ -134,13 +144,13 @@
         html += '</table>';
         html += '</div>';
         html += '</td></tr></table>';
-        html += '<small><strong>Gestor de Armazéns</strong> - By Gemini</small>';
+        html += '<small><strong>Gestor de Armazéns</strong> - By rodaSbro</small>';
         html += '</div>';
 
         Dialog.show('warehouse_helper', html);
     }
 
-    // Executar script
+    // Arranque automático
     fnExecuteWarehouseScript();
 
 })(window);
