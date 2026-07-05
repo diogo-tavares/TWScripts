@@ -144,7 +144,7 @@
         html += '</table>';
         html += '</div>';
         html += '</td></tr></table>';
-        html += '<small><strong>Gestor de Armazéns</strong> - By rodaSbro</small>';
+        html += '<small><strong>Gestor de Armazéns</strong> - By rodaSbro </small>';
         html += '</div>';
 
         Dialog.show('warehouse_helper', html);
