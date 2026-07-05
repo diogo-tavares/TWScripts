@@ -1,38 +1,46 @@
 (function(window) {
-    var strVersion = 'v1.2 (Gestor de Armazéns Definitivo)';
 
     window.fnExecuteWarehouseScript = function() {
         UI.InfoMessage('A investigar armazéns... aguarde.', 2000);
 
-        // Fazemos um pedido invisível à página de produção
         $.ajax({
             url: '/game.php?screen=overview_villages&mode=prod&page=-1',
             type: 'GET',
             success: function(data) {
-                // Lê o HTML da página oculta
                 var $html = $($.parseHTML(data));
+                var $prodTable = $html.find('#production_table');
                 var villages = [];
+                var processedIds = []; // Vai guardar as aldeias já lidas para evitar repetições
 
-                // O novo motor "caçador": ignora a tabela e vai direto a todas as linhas (tr)
-                $html.find('tr').each(function() {
+                if (!$prodTable.length) {
+                    UI.ErrorMessage('Tabela de produção não encontrada. Certifica-te que tens premium ou aldeias visíveis.', 4000);
+                    return;
+                }
+
+                // Função cirúrgica para extrair números (limpa os números ocultos que o jogo usa para ordenação)
+                function getCleanNumber($td) {
+                    if (!$td || !$td.length) return 0;
+                    var $clone = $td.clone();
+                    $clone.find('.hidden').remove(); // Apaga o lixo escondido
+                    return parseInt($clone.text().replace(/\D/g, ''), 10) || 0;
+                }
+
+                $prodTable.find('tr').each(function() {
                     var $row = $(this);
-                    
-                    // Procura os elementos dos recursos na linha
-                    var $wood = $row.find('.wood');
-                    var $stone = $row.find('.stone');
-                    var $iron = $row.find('.iron');
-                    
-                    // Se a linha não tiver os 3 recursos, salta fora (não é uma linha de aldeia)
-                    if ($wood.length === 0 || $stone.length === 0 || $iron.length === 0) return;
 
-                    // Procura o nome e ID da aldeia
-                    var $link = $row.find('td:first a').first();
-                    if ($row.find('span.quickedit-vn a').length) {
-                        $link = $row.find('span.quickedit-vn a').first(); // Se tiver edição rápida
+                    // O escudo: se não for uma linha de tabela de aldeia (row_a ou row_b), ignora imediatamente
+                    if (!$row.hasClass('row_a') && !$row.hasClass('row_b')) return;
+
+                    var $link = $row.find('span.quickedit-vn a').first();
+                    if (!$link.length) {
+                        $link = $row.find('td:eq(0) a').first();
                     }
-                    if (!$link.length) return;
 
+                    if (!$link.length) return;
+                    
                     var vName = $link.text().trim();
+                    if (vName === '') return; // Ignora linhas em branco
+
                     var vUrl = $link.attr('href');
                     if (!vUrl) return;
                     
@@ -40,23 +48,31 @@
                     if (!vMatch) return;
                     var vId = vMatch[1];
 
-                    // Extrai os valores numéricos limpos
-                    var wood = parseInt($wood.text().replace(/\D/g, ''), 10) || 0;
-                    var stone = parseInt($stone.text().replace(/\D/g, ''), 10) || 0;
-                    var iron = parseInt($iron.text().replace(/\D/g, ''), 10) || 0;
+                    // Bloqueio de duplicados: se a aldeia já foi lida, passa à frente
+                    if (processedIds.includes(vId)) return;
 
-                    // O armazém está sempre na célula (td) seguinte aos recursos
-                    var $resTd = $wood.closest('td');
-                    var $storageTd = $resTd.next('td');
-                    var storage = parseInt($storageTd.text().replace(/\D/g, ''), 10) || 0;
+                    // Encontra as células (td) exatas onde estão os recursos usando o ícone
+                    var $tdWood = $row.find('.wood').first().closest('td');
+                    var $tdStone = $row.find('.stone').first().closest('td');
+                    var $tdIron = $row.find('.iron').first().closest('td');
+
+                    if (!$tdWood.length || !$tdStone.length || !$tdIron.length) return;
+
+                    var wood = getCleanNumber($tdWood);
+                    var stone = getCleanNumber($tdStone);
+                    var iron = getCleanNumber($tdIron);
+                    
+                    // O armazém está sempre na célula logo a seguir ao ferro
+                    var $tdStorage = $tdIron.next('td');
+                    var storage = getCleanNumber($tdStorage);
 
                     if (storage > 0) {
-                        // Calcula as percentagens arredondadas
+                        processedIds.push(vId); // Marca a aldeia como "Concluída"
+                        
                         var pWood = Math.round((wood / storage) * 100);
                         var pStone = Math.round((stone / storage) * 100);
                         var pIron = Math.round((iron / storage) * 100);
                         
-                        // Qual é a percentagem mais alta?
                         var maxP = Math.max(pWood, pStone, pIron);
 
                         villages.push({
@@ -71,16 +87,15 @@
                 });
 
                 if (villages.length === 0) {
-                    UI.ErrorMessage('Não foram encontradas aldeias. Certifica-te que tens aldeias na Visão Geral de Produção.', 5000);
+                    UI.ErrorMessage('Não foram encontradas aldeias. Algo pode estar diferente na conta.', 5000);
                     return;
                 }
 
-                // Ordenar: as aldeias mais cheias primeiro
+                // Ordenar: as aldeias mais cheias ficam no topo
                 villages.sort(function(a, b) {
                     return b.maxP - a.maxP;
                 });
 
-                // Construir a UI
                 buildUI(villages);
             },
             error: function() {
@@ -139,7 +154,7 @@
         html += '</table>';
         html += '</div>';
         html += '</td></tr></table>';
-        html += '<small><strong>Gestor de Armazéns</strong> - ' + strVersion + '</small>';
+        html += '<small><strong>Gestor de Armazéns</strong> - ' + '</small>';
         html += '</div>';
 
         Dialog.show('warehouse_helper', html);
