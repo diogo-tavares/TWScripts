@@ -10,25 +10,25 @@
                 var $html = $($.parseHTML(data));
                 var $prodTable = $html.find('#production_table');
                 var villages = [];
-                var processedIds = []; // Vai guardar as aldeias já lidas para evitar repetições
+                var processedIds = []; 
 
                 if (!$prodTable.length) {
-                    UI.ErrorMessage('Tabela de produção não encontrada. Certifica-te que tens premium ou aldeias visíveis.', 4000);
+                    UI.ErrorMessage('Tabela de produção não encontrada.', 4000);
                     return;
                 }
 
-                // Função cirúrgica para extrair números (limpa os números ocultos que o jogo usa para ordenação)
-                function getCleanNumber($td) {
-                    if (!$td || !$td.length) return 0;
-                    var $clone = $td.clone();
-                    $clone.find('.hidden').remove(); // Apaga o lixo escondido
+                // Função cirúrgica para extrair APENAS os números do elemento exato
+                function getCleanNumber($el) {
+                    if (!$el || !$el.length) return 0;
+                    var $clone = $el.clone();
+                    $clone.find('.hidden').remove(); 
                     return parseInt($clone.text().replace(/\D/g, ''), 10) || 0;
                 }
 
                 $prodTable.find('tr').each(function() {
                     var $row = $(this);
 
-                    // O escudo: se não for uma linha de tabela de aldeia (row_a ou row_b), ignora imediatamente
+                    // Ignorar cabeçalhos e afins
                     if (!$row.hasClass('row_a') && !$row.hasClass('row_b')) return;
 
                     var $link = $row.find('span.quickedit-vn a').first();
@@ -39,7 +39,7 @@
                     if (!$link.length) return;
                     
                     var vName = $link.text().trim();
-                    if (vName === '') return; // Ignora linhas em branco
+                    if (vName === '') return; 
 
                     var vUrl = $link.attr('href');
                     if (!vUrl) return;
@@ -48,26 +48,26 @@
                     if (!vMatch) return;
                     var vId = vMatch[1];
 
-                    // Bloqueio de duplicados: se a aldeia já foi lida, passa à frente
+                    // Bloqueio de duplicados
                     if (processedIds.includes(vId)) return;
 
-                    // Encontra as células (td) exatas onde estão os recursos usando o ícone
-                    var $tdWood = $row.find('.wood').first().closest('td');
-                    var $tdStone = $row.find('.stone').first().closest('td');
-                    var $tdIron = $row.find('.iron').first().closest('td');
+                    // AGORA SIM: Extrair diretamente do SPAN do ícone (e não da célula inteira)
+                    var $spanWood = $row.find('.wood').first();
+                    var $spanStone = $row.find('.stone').first();
+                    var $spanIron = $row.find('.iron').first();
 
-                    if (!$tdWood.length || !$tdStone.length || !$tdIron.length) return;
+                    if (!$spanWood.length || !$spanStone.length || !$spanIron.length) return;
 
-                    var wood = getCleanNumber($tdWood);
-                    var stone = getCleanNumber($tdStone);
-                    var iron = getCleanNumber($tdIron);
+                    var wood = getCleanNumber($spanWood);
+                    var stone = getCleanNumber($spanStone);
+                    var iron = getCleanNumber($spanIron);
                     
-                    // O armazém está sempre na célula logo a seguir ao ferro
-                    var $tdStorage = $tdIron.next('td');
+                    // O armazém está na célula (td) a seguir à célula que contém os recursos
+                    var $tdStorage = $spanIron.closest('td').next('td');
                     var storage = getCleanNumber($tdStorage);
 
                     if (storage > 0) {
-                        processedIds.push(vId); // Marca a aldeia como "Concluída"
+                        processedIds.push(vId); 
                         
                         var pWood = Math.round((wood / storage) * 100);
                         var pStone = Math.round((stone / storage) * 100);
@@ -87,7 +87,7 @@
                 });
 
                 if (villages.length === 0) {
-                    UI.ErrorMessage('Não foram encontradas aldeias. Algo pode estar diferente na conta.', 5000);
+                    UI.ErrorMessage('Não foram encontradas aldeias válidas.', 5000);
                     return;
                 }
 
@@ -99,7 +99,7 @@
                 buildUI(villages);
             },
             error: function() {
-                UI.ErrorMessage('Erro ao ligar ao servidor para ler os armazéns.', 4000);
+                UI.ErrorMessage('Erro ao ligar ao servidor.', 4000);
             }
         });
     };
@@ -135,10 +135,9 @@
                 linkColor = '#a87b00'; 
             }
 
-            // O link que leva para o mercado no mesmo separador
             var marketUrl = '/game.php?village=' + v.id + '&screen=market';
 
-            // Destacar os números críticos a bold e cor
+            // Destacar os números
             var styleW = (v.wood >= 80) ? 'color:#cc0000; font-weight:bold;' : ((v.wood >= 60) ? 'color:#a87b00; font-weight:bold;' : '');
             var styleS = (v.stone >= 80) ? 'color:#cc0000; font-weight:bold;' : ((v.stone >= 60) ? 'color:#a87b00; font-weight:bold;' : '');
             var styleI = (v.iron >= 80) ? 'color:#cc0000; font-weight:bold;' : ((v.iron >= 60) ? 'color:#a87b00; font-weight:bold;' : '');
@@ -160,7 +159,6 @@
         Dialog.show('warehouse_helper', html);
     }
 
-    // Arranque automático
     fnExecuteWarehouseScript();
 
 })(window);
