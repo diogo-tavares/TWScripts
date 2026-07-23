@@ -1,5 +1,5 @@
 (function(window) {
-    var strVersion = 'v8.6 (Ultimate)';
+    var strVersion = 'v8.6 (Ultimate - Real Troops Mod)';
     var unitDesc = { spear: 'Spear fighters', sword: 'Swordsmen', axe: 'Axemen', archer: 'Archers', spy: 'Scouts', light: 'Light cavalry', marcher: 'Mounted archers', heavy: 'Heavy cavalry', ram: 'Rams', catapult: 'Catapults', knight: 'Paladin', snob: 'Noblemen', offense: 'Offensive', defense: 'Defensive' };
 
     window.fnExecuteScript = function() {
@@ -25,7 +25,7 @@
     
     function fnCriteriaToStr(c) { var s = ''; c.forEach(x => { if(x.minpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] >= '+x.minpop+')'; if(x.maxpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] < '+x.maxpop+')'; }); return s; }
 
-    // NOVO MOTOR DE CONTAGEM: Lê diretamente a linha de "Total" sem apagar nada
+    // NOVO MOTOR DE CONTAGEM: Soma (Próprias + No exterior + Em trânsito) ignorando apoios
     function fnGetTroopCount() {
         var villageTroopInfo = [];
         var unitConfig = fnCreateUnitConfig();
@@ -52,19 +52,36 @@
                 villageData.url = vId ? ('/game.php?village=' + vId + '&screen=farm') : rawUrl;
                 villageData.name = $link.text().trim() || villageData.coords;
 
-                // Lê os números da última linha do grupo (que é sempre o Total da aldeia)
-                var $totalRow = $rows.last();
-                
-                $totalRow.find('td:gt(0)').each(function(tdIndex) {
-                    if (tdIndex < numUnits) {
-                        var textVal = $(this).text().replace(/[\.,]/g, '').trim();
-                        if ($(this).find('.hidden').length > 0) {
-                            textVal = $(this).text().replace($(this).find('.hidden').text(), '').replace(/[\.,]/g, '').trim();
+                // Índices das linhas que queremos somar: 0 (Próprias), 2 (No exterior), 3 (Em trânsito)
+                var rowsToSum = [0, 2, 3];
+
+                // Percorre cada unidade (coluna)
+                for (var tdIndex = 0; tdIndex < numUnits; tdIndex++) {
+                    var unitTotal = 0;
+
+                    // Percorre as 3 linhas específicas para a unidade atual e soma
+                    rowsToSum.forEach(function(rowIndex) {
+                        if ($rows.length > rowIndex) { // Prevenção: garante que a linha existe
+                            var $cell = $rows.eq(rowIndex).find('td:gt(0)').eq(tdIndex);
+                            if ($cell.length) {
+                                var textVal = $cell.text().replace(/[\.,]/g, '').trim();
+                                
+                                // Limpa valores escondidos se existirem na célula
+                                if ($cell.find('.hidden').length > 0) {
+                                    textVal = $cell.text().replace($cell.find('.hidden').text(), '').replace(/[\.,]/g, '').trim();
+                                }
+                                
+                                var val = parseInt(textVal, 10);
+                                if (!isNaN(val)) {
+                                    unitTotal += val;
+                                }
+                            }
                         }
-                        var val = parseInt(textVal, 10);
-                        villageData.troops[tdIndex] = isNaN(val) ? 0 : val;
-                    }
-                });
+                    });
+
+                    // Guarda o total real dessa unidade
+                    villageData.troops[tdIndex] = unitTotal;
+                }
 
                 villageTroopInfo.push(villageData);
             }
