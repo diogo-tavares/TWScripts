@@ -25,7 +25,7 @@
     
     function fnCriteriaToStr(c) { var s = ''; c.forEach(x => { if(x.minpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] >= '+x.minpop+')'; if(x.maxpop) s+=(s?' and ':'')+'('+unitDesc[x.unit]+'[pop] < '+x.maxpop+')'; }); return s; }
 
-    // NOVO MOTOR DE CONTAGEM: Soma (Próprias + No exterior + Em trânsito) ignorando apoios
+    // NOVO MOTOR DE CONTAGEM (CORRIGIDO)
     function fnGetTroopCount() {
         var villageTroopInfo = [];
         var unitConfig = fnCreateUnitConfig();
@@ -33,7 +33,7 @@
 
         $('#units_table tbody').each(function () {
             var $rows = $(this).find('tr');
-            if ($rows.length === 0 || $rows.find('th').length > 0) return; // Ignora cabeçalhos
+            if ($rows.length === 0 || $rows.find('th').length > 0) return;
 
             var $firstCell = $rows.first().find('td:first');
             var coordsMatch = $firstCell.text().match(/\d+\|\d+/g);
@@ -44,7 +44,6 @@
                 villageData.x = parseInt(coords[1], 10);
                 villageData.y = parseInt(coords[2], 10);
                 
-                // Link direto para a Praça de Reuniões
                 var $link = $firstCell.find('a:first');
                 var rawUrl = $link.attr('href') || '#';
                 var vMatch = rawUrl.match(/village=(\d+)/);
@@ -52,21 +51,20 @@
                 villageData.url = vId ? ('/game.php?village=' + vId + '&screen=farm') : rawUrl;
                 villageData.name = $link.text().trim() || villageData.coords;
 
-                // Índices das linhas que queremos somar: 0 (Próprias), 2 (No exterior), 3 (Em trânsito)
                 var rowsToSum = [0, 2, 3];
 
-                // Percorre cada unidade (coluna)
                 for (var tdIndex = 0; tdIndex < numUnits; tdIndex++) {
                     var unitTotal = 0;
 
-                    // Percorre as 3 linhas específicas para a unidade atual e soma
                     rowsToSum.forEach(function(rowIndex) {
-                        if ($rows.length > rowIndex) { // Prevenção: garante que a linha existe
-                            var $cell = $rows.eq(rowIndex).find('td:gt(0)').eq(tdIndex);
+                        if ($rows.length > rowIndex) {
+                            // CORREÇÃO: A linha 0 tem a célula com o nome da aldeia. Temos de saltar 1 coluna extra.
+                            var skipCells = (rowIndex === 0) ? 1 : 0; 
+                            var $cell = $rows.eq(rowIndex).find('td:gt(' + skipCells + ')').eq(tdIndex);
+                            
                             if ($cell.length) {
                                 var textVal = $cell.text().replace(/[\.,]/g, '').trim();
                                 
-                                // Limpa valores escondidos se existirem na célula
                                 if ($cell.find('.hidden').length > 0) {
                                     textVal = $cell.text().replace($cell.find('.hidden').text(), '').replace(/[\.,]/g, '').trim();
                                 }
@@ -79,7 +77,6 @@
                         }
                     });
 
-                    // Guarda o total real dessa unidade
                     villageData.troops[tdIndex] = unitTotal;
                 }
 
