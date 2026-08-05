@@ -51,11 +51,11 @@ javascript:
             var timeStr = self.pad(now.getHours()) + ":" + self.pad(now.getMinutes()) + ":" + self.pad(now.getSeconds());
 
             var html = `
-            <div id="tw_group_planner" style="max-width:100%; box-sizing:border-box; padding:5px;">
+            <div id="tw_group_planner" style="width:100%; box-sizing:border-box; padding:5px;">
                 <table class="vis" style="width:100%; margin-bottom:10px;">
                     <tr>
-                        <th>Grupo:</th>
-                        <td><select id="planner_group_select" style="width:100%;"><option value="">A carregar...</option></select></td>
+                        <th style="width:30%;">Grupo:</th>
+                        <td><select id="planner_group_select" style="width:100%;"><option value="">A carregar grupos...</option></select></td>
                     </tr>
                     <tr>
                         <th>Alvo (X|Y):</th>
@@ -71,14 +71,18 @@ javascript:
                     </tr>
                 </table>
                 <div style="text-align:center; margin-bottom:10px;">
-                    <button class="btn btn-confirm-yes" id="btn_calculate_plan" style="width:100%; padding:8px;">Calcular Horários</button>
+                    <button class="btn btn-confirm-yes" id="btn_calculate_plan" style="width:100%; padding:8px; font-weight:bold;">Calcular Horários</button>
                 </div>
                 <div id="planner_results" style="overflow-x:auto;"></div>
             </div>`;
 
-            // Usa o sistema de janelas nativas do Tribos para ser 100% compatível com a App
+            // Janela adaptável: 750px no PC ou a largura total disponível no telemóvel
             Dialog.show("tw_group_planner_dialog", html);
-            $('#tw_group_planner_dialog').css({'max-width': '95vw', 'width': '600px'});
+            var calcWidth = Math.min(750, $(window).width() - 20);
+            $('#tw_group_planner_dialog').css({
+                'width': calcWidth + 'px',
+                'max-width': '98vw'
+            });
 
             $('#planner_group_select').change(function(){
                 var url = $(this).val();
@@ -97,14 +101,40 @@ javascript:
 
             $.get(overviewUrl, function(data) {
                 var $html = $(data);
-                var $groups = $html.find('.vis_item').first().find('a');
+                // Procura grupos tanto em tags 'a' (PC) como em 'option' (Versão Mobile/App)
+                var $groupElements = $html.find('.group-menu-item, .vis_item a[href*="group="], select[name="group_id"] option, #group_list a');
                 var options = '<option value="">-- Seleciona um Grupo --</option>';
-                
-                $groups.each(function() {
-                    var name = $(this).text().replace('[', '').replace(']', '').trim();
-                    var href = $(this).attr('href') + '&page=-1';
-                    options += `<option value="${href}">${name}</option>`;
+                var addedGroups = {};
+
+                $groupElements.each(function() {
+                    var $this = $(this);
+                    var name = $this.text().replace('[', '').replace(']', '').trim();
+                    var href = $this.attr('href') || $this.val();
+
+                    if(name && href && !addedGroups[name] && name.toLowerCase() !== 'todos' && name.toLowerCase() !== 'wszystkie') {
+                        // Converte valor em URL se for um elemento <option>
+                        if(href.indexOf('game.php') === -1 && !isNaN(href)) {
+                            href = overviewUrl.replace('group=0', 'group=' + href);
+                        } else if(href.indexOf('page=-1') === -1) {
+                            href += '&page=-1';
+                        }
+                        
+                        addedGroups[name] = true;
+                        options += `<option value="${href}">${name}</option>`;
+                    }
                 });
+
+                // Fallback caso o seletor principal falhe na App
+                if(Object.keys(addedGroups).length === 0) {
+                    $html.find('a[href*="group="]').each(function() {
+                        var name = $(this).text().replace('[', '').replace(']', '').trim();
+                        var href = $(this).attr('href') + '&page=-1';
+                        if(name && !addedGroups[name]) {
+                            addedGroups[name] = true;
+                            options += `<option value="${href}">${name}</option>`;
+                        }
+                    });
+                }
 
                 $('#planner_group_select').html(options);
             });
@@ -165,7 +195,7 @@ javascript:
                 <thead>
                     <tr>
                         <th>Aldeia</th>
-                        <th>Tropa</th>
+                        <th>Tropa Base</th>
                     </tr>
                 </thead>
                 <tbody>`;
