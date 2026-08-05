@@ -5,7 +5,6 @@ javascript:
         return;
     }
 
-    // 1.º Clique: Se não estiver na Visão Geral (Tropas), redireciona automaticamente
     if (window.location.href.indexOf('screen=overview_villages') === -1 || window.location.href.indexOf('mode=units') === -1) {
         UI.InfoMessage('A redirecionar para a Visão Geral (Tropas)...', 1500);
         var targetUrl = '/game.php?village=' + game_data.village.id + '&screen=overview_villages&mode=units';
@@ -17,7 +16,6 @@ javascript:
     }
 
     var fakePlanner = {
-        // Velocidade base do Áriete calibrada para o PT114
         ramSpeedInSeconds: 1764.724,
         unitName: "Ariete",
         activeVillages: [],
@@ -49,14 +47,13 @@ javascript:
             var self = this;
             self.activeVillages = [];
 
-            $('#units_table tbody tr').each(function(i) {
-                if (i === 0) return;
+            $('#units_table tbody tr').each(function() {
                 var $row = $(this);
-                var $spans = $row.find('td').first().find('span');
+                var $spans = $row.find('td').first().find('span[data-id]');
                 
-                if ($spans.length >= 3) {
+                if ($spans.length >= 1) {
                     var vId = $spans.eq(0).attr('data-id');
-                    var name = $spans.eq(2).text();
+                    var name = $row.find('td').first().text();
                     var coordsMatch = name.match(/\d{3}\|\d{3}/);
                     
                     if (coordsMatch && vId) {
@@ -148,7 +145,6 @@ javascript:
             var assignedPlans = [];
             var unassignedTargets = [];
 
-            // 1. Distribuição inicial 1 para 1
             for (var i = 0; i < targetsToAssign.length; i++) {
                 var target = targetsToAssign[i];
                 if (availableOrigins.length > 0) {
@@ -162,7 +158,6 @@ javascript:
                 }
             }
 
-            // 2. Otimização do Bónus Noturno (01:00 às 09:00)
             var hasBadTimes = true;
             var maxLoopSafety = 500; 
             var loops = 0;
@@ -191,7 +186,6 @@ javascript:
                 }
             }
 
-            // 3. Processamento Final e Cálculo de Horários
             var results = [];
             var badTimeCount = 0;
             var bbExport = `Plano de Fakes (chegada a ${arrivalISOStr})\n\n`;
@@ -270,7 +264,6 @@ javascript:
                     <td><a href="${r.placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a></td>
                 </tr>`;
 
-                // Exportação atualizada com "[b]fake[/b]"
                 bbExport += `Lançar ${r.unit} [b]fake[/b] da [village]${r.coords}[/village] contra a aldeia [village]${r.target}[/village] a [i]${r.dateFormatted}[/i] [b]${r.timeFormatted}[/b]\n`;
             });
 
