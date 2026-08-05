@@ -285,7 +285,7 @@ javascript:
             outHtml += `</tbody></table>`;
             
             outHtml += `<div style="margin-top:10px;">
-                <h4>Exportar Plano (Formato TW Stats com Hiperligação):</h4>
+                <h4>Exportar Plano:</h4>
                 <textarea style="width:98%; height:120px;" onclick="this.select()">${bbExport}</textarea>
             </div>`;
 
