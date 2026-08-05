@@ -5,7 +5,6 @@ javascript:
         return;
     }
 
-    // Se não estiver na página de Visão Geral (Tropas), redireciona no 1º clique
     if (window.location.href.indexOf('screen=overview_villages') === -1 || window.location.href.indexOf('mode=units') === -1) {
         UI.InfoMessage('A redirecionar para a Visão Geral (Tropas)...', 1500);
         var targetUrl = '/game.php?village=' + game_data.village.id + '&screen=overview_villages&mode=units';
@@ -51,7 +50,6 @@ javascript:
 
         detectCurrentGroup: function() {
             var self = this;
-            // Deteta o nome do grupo selecionado no ecrã (PC e Mobile)
             var $activeGroup = $('.group-menu-item.btn-b, .vis_item strong, #group_list strong, .option-selected');
             if ($activeGroup.length) {
                 var name = $activeGroup.first().text().replace('[', '').replace(']', '').trim();
@@ -68,14 +66,13 @@ javascript:
             var self = this;
             self.villages = [];
 
-            $('#units_table tbody tr').each(function(i) {
-                if (i === 0) return;
+            $('#units_table tbody tr').each(function() {
                 var $row = $(this);
-                var $spans = $row.find('td').first().find('span');
+                var $spans = $row.find('td').first().find('span[data-id]');
                 
-                if ($spans.length >= 3) {
+                if ($spans.length >= 1) {
                     var vId = $spans.eq(0).attr('data-id');
-                    var name = $spans.eq(2).text();
+                    var name = $row.find('td').first().text();
                     var coordsMatch = name.match(/\d{3}\|\d{3}/);
                     
                     if (coordsMatch && vId) {
@@ -271,13 +268,14 @@ javascript:
                     <td><a href="${r.placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a></td>
                 </tr>`;
 
-                bbExport += `[url=https://${document.location.host}${r.placeUrl}]Atacar[/url] ${r.unit} da [village]${r.coords}[/village] a [i]${r.dateFormatted}[/i] [b]${r.timeFormatted}[/b]\n`;
+                // Novo formato de exportação sem hiperligação e com aldeia alvo
+                bbExport += `Lançar ${r.unit} da [village]${r.coords}[/village] contra a aldeia [village]${targetCoordsStr}[/village] a [i]${r.dateFormatted}[/i] [b]${r.timeFormatted}[/b]\n`;
             });
 
             outHtml += `</tbody></table>`;
             
             outHtml += `<div style="margin-top:15px;">
-                <b>Exportar Plano (TW Stats BBCode):</b>
+                <b>Exportar Plano (BBCode):</b>
                 <textarea style="width:100%; height:120px; box-sizing:border-box; font-size:11px;" onclick="this.select()">${bbExport}</textarea>
             </div>`;
 
