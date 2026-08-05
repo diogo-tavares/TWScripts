@@ -6,13 +6,20 @@ javascript:
     }
 
     var groupPlanner = {
-        worldSpeed: 1,
-        unitSpeed: 1,
-        speeds: {},
-        unitBaseSpeeds: {
-            spear: 18, sword: 22, axe: 18, archer: 18, spy: 9,
-            light: 10, marcher: 10, heavy: 11, ram: 29, catapult: 29,
-            knight: 10, snob: 34
+        // Velocidades exatas em segundos por campo (calibradas ao PT114)
+        speedsInSeconds: {
+            spear: 1095.517,     // Lanceiro (18.25 min/campo)
+            sword: 1338.965,     // Espadachim (22.31 min/campo)
+            axe: 1095.517,       // Viking (18.25 min/campo)
+            archer: 1095.517,    // Arqueiro (18.25 min/campo)
+            spy: 547.758,        // Batedor (9.13 min/campo)
+            light: 608.62,       // Cavalaria Leve (10.14 min/campo)
+            marcher: 608.62,     // Arqueiro a Cavalo (10.14 min/campo)
+            heavy: 669.483,      // Cavalaria Pesada (11.16 min/campo)
+            ram: 1764.724,       // Ariete (29.41 min/campo -> dá exatamente 9:21:55)
+            catapult: 1764.724,  // Catapulta (29.41 min/campo)
+            knight: 608.62,      // Paladino (10.14 min/campo)
+            snob: 2069.31        // Nobre (34.48 min/campo)
         },
         unitNames: {
             spear: "Lanceiro", sword: "Espadachim", axe: "Viking",
@@ -26,26 +33,8 @@ javascript:
         init: function() {
             var self = this;
             UI.InfoMessage('A iniciar planeador...', 1000);
-            
-            // Obter a velocidade do mundo via game_data ou interface
-            $.get('/interface.php?func=get_config', function(xml) {
-                var speed = parseFloat($(xml).find('config speed').text()) || 1;
-                var uSpeed = parseFloat($(xml).find('config unit_speed').text()) || 1;
-                var totalFactor = speed * uSpeed;
-
-                $.each(self.unitBaseSpeeds, function(u, baseMin) {
-                    self.speeds[u] = baseMin / totalFactor;
-                });
-
-                self.buildUI();
-                self.loadGroups();
-            }).fail(function() {
-                $.each(self.unitBaseSpeeds, function(u, baseMin) {
-                    self.speeds[u] = baseMin;
-                });
-                self.buildUI();
-                self.loadGroups();
-            });
+            self.buildUI();
+            self.loadGroups();
         },
 
         buildUI: function() {
@@ -234,8 +223,8 @@ javascript:
                 var dy = Math.abs(parseInt(tCoords[1]) - parseInt(vCoords[1]));
                 var dist = Math.sqrt(dx * dx + dy * dy);
 
-                // Cálculo com conversão exata de segundos igual ao TW Stats
-                var travelTimeSeconds = Math.round(dist * self.speeds[unit] * 60);
+                // Duração em segundos exata baseada nas coordenadas reais
+                var travelTimeSeconds = Math.round(dist * self.speedsInSeconds[unit]);
 
                 var launchTime = new Date(arrivalTime.getTime() - (travelTimeSeconds * 1000));
 
