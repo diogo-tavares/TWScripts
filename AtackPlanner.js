@@ -6,8 +6,10 @@ javascript:
     }
 
     var groupPlanner = {
-        // Velocidades base exatas em minutos por campo
-        speeds: {
+        worldSpeed: 1,
+        unitSpeed: 1,
+        speeds: {},
+        unitBaseSpeeds: {
             spear: 18, sword: 22, axe: 18, archer: 18, spy: 9,
             light: 10, marcher: 10, heavy: 11, ram: 29, catapult: 29,
             knight: 10, snob: 34
@@ -24,8 +26,26 @@ javascript:
         init: function() {
             var self = this;
             UI.InfoMessage('A iniciar planeador...', 1000);
-            self.buildUI();
-            self.loadGroups();
+            
+            // Obter a velocidade do mundo via game_data ou interface
+            $.get('/interface.php?func=get_config', function(xml) {
+                var speed = parseFloat($(xml).find('config speed').text()) || 1;
+                var uSpeed = parseFloat($(xml).find('config unit_speed').text()) || 1;
+                var totalFactor = speed * uSpeed;
+
+                $.each(self.unitBaseSpeeds, function(u, baseMin) {
+                    self.speeds[u] = baseMin / totalFactor;
+                });
+
+                self.buildUI();
+                self.loadGroups();
+            }).fail(function() {
+                $.each(self.unitBaseSpeeds, function(u, baseMin) {
+                    self.speeds[u] = baseMin;
+                });
+                self.buildUI();
+                self.loadGroups();
+            });
         },
 
         buildUI: function() {
@@ -214,7 +234,7 @@ javascript:
                 var dy = Math.abs(parseInt(tCoords[1]) - parseInt(vCoords[1]));
                 var dist = Math.sqrt(dx * dx + dy * dy);
 
-                // Arredondamento exato do motor do jogo (em segundos)
+                // Cálculo com conversão exata de segundos igual ao TW Stats
                 var travelTimeSeconds = Math.round(dist * self.speeds[unit] * 60);
 
                 var launchTime = new Date(arrivalTime.getTime() - (travelTimeSeconds * 1000));
