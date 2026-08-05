@@ -5,6 +5,17 @@ javascript:
         return;
     }
 
+    // Se não estiver na página de Visão Geral (Tropas), redireciona no 1º clique
+    if (window.location.href.indexOf('screen=overview_villages') === -1 || window.location.href.indexOf('mode=units') === -1) {
+        UI.InfoMessage('A redirecionar para a Visão Geral (Tropas)...', 1500);
+        var targetUrl = '/game.php?village=' + game_data.village.id + '&screen=overview_villages&mode=units';
+        if (game_data.player.sitter != "0") {
+            targetUrl = '/game.php?t=' + game_data.player.id + '&village=' + game_data.village.id + '&screen=overview_villages&mode=units';
+        }
+        window.location.href = targetUrl;
+        return;
+    }
+
     var groupPlanner = {
         speedsInSeconds: {
             spear: 1095.346,
@@ -28,106 +39,70 @@ javascript:
         },
         activeUnits: ['spear','sword','axe','spy','light','heavy','ram','catapult','snob','knight'],
         villages: [],
+        currentGroupName: "Todos",
 
         init: function() {
             var self = this;
-            UI.InfoMessage('A ler aldeias do grupo atual...', 1000);
+            UI.InfoMessage('A ler aldeias do grupo...', 1000);
+            self.detectCurrentGroup();
             self.readCurrentPageVillages();
             self.buildUI();
+        },
+
+        detectCurrentGroup: function() {
+            var self = this;
+            // Deteta o nome do grupo selecionado no ecrã (PC e Mobile)
+            var $activeGroup = $('.group-menu-item.btn-b, .vis_item strong, #group_list strong, .option-selected');
+            if ($activeGroup.length) {
+                var name = $activeGroup.first().text().replace('[', '').replace(']', '').trim();
+                if (name) self.currentGroupName = name;
+            } else {
+                var $selectedOpt = $('select[name="group_id"] option:selected');
+                if ($selectedOpt.length) {
+                    self.currentGroupName = $selectedOpt.text().trim();
+                }
+            }
         },
 
         readCurrentPageVillages: function() {
             var self = this;
             self.villages = [];
 
-            // Procura tabela de unidades ou tabelas de aldeias na página atual (PC e App)
-            var $rows = $('#units_table tbody tr, .vis tbody tr');
-
-            $rows.each(function() {
+            $('#units_table tbody tr').each(function(i) {
+                if (i === 0) return;
                 var $row = $(this);
-                var $spans = $row.find('td span[data-id]');
-                var $link = $row.find('a[href*="screen=info_village"]');
+                var $spans = $row.find('td').first().find('span');
                 
-                var vId = null;
-                var name = "";
-
-                if ($spans.length) {
-                    vId = $spans.eq(0).attr('data-id');
-                    name = $row.find('td').first().text();
-                } else if ($link.length) {
-                    var href = $link.attr('href');
-                    var mId = href.match(/id=(\d+)/);
-                    if (mId) vId = mId[1];
-                    name = $link.text();
-                }
-
-                if (vId && name) {
+                if ($spans.length >= 3) {
+                    var vId = $spans.eq(0).attr('data-id');
+                    var name = $spans.eq(2).text();
                     var coordsMatch = name.match(/\d{3}\|\d{3}/);
-                    if (coordsMatch) {
-                        // Evita duplicados
-                        var exists = self.villages.some(function(v){ return v.id === vId; });
-                        if (!exists) {
-                            self.villages.push({
-                                id: vId,
-                                name: name.trim(),
-                                coords: coordsMatch[0]
-                            });
-                        }
+                    
+                    if (coordsMatch && vId) {
+                        self.villages.push({
+                            id: vId,
+                            name: name.trim(),
+                            coords: coordsMatch[0]
+                        });
                     }
                 }
             });
-
-            // Se não encontrou na página atual, tenta um GET rápido ao grupo ativo
-            if (self.villages.length === 0) {
-                var currentUrl = window.location.href;
-                if (currentUrl.indexOf('screen=overview_villages') === -1) {
-                    var fetchUrl = '/game.php?village=' + game_data.village.id + '&screen=overview_villages&mode=units';
-                    if (game_data.player.sitter != "0") {
-                        fetchUrl = '/game.php?t=' + game_data.player.id + '&village=' + game_data.village.id + '&screen=overview_villages&mode=units';
-                    }
-                    $.ajax({
-                        url: fetchUrl,
-                        async: false,
-                        success: function(data) {
-                            var $html = $(data);
-                            $html.find('#units_table tbody tr').each(function(i) {
-                                if (i === 0) return;
-                                var $spans = $(this).find('td').first().find('span');
-                                if ($spans.length >= 3) {
-                                    var vId = $spans.eq(0).attr('data-id');
-                                    var vName = $spans.eq(2).text();
-                                    var coordsMatch = vName.match(/\d{3}\|\d{3}/);
-                                    if (coordsMatch && vId) {
-                                        self.villages.push({
-                                            id: vId,
-                                            name: vName.trim(),
-                                            coords: coordsMatch[0]
-                                        });
-                                    }
-                                }
-                            });
-                        }
-                    });
-                }
-            }
         },
 
         buildUI: function() {
             var self = this;
             var targetCoords = game_data.village.x + '|' + game_data.village.y;
             
-            if (game_data.screen === "info_village") {
-                var txt = $('#content_value').text();
-                var m = txt.match(/\d{3}\|\d{3}/);
-                if (m) targetCoords = m[0];
-            }
-
             var now = new Date();
             var dateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
             var timeStr = self.pad(now.getHours()) + ":" + self.pad(now.getMinutes()) + ":" + self.pad(now.getSeconds());
 
             var html = `
             <div id="tw_group_planner" style="width:100%; box-sizing:border-box; padding:5px;">
+                <div style="background:#804000; color:#fff; padding:6px 10px; font-weight:bold; border-radius:3px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                    <span>📁 Grupo Ativo: <u style="color:#ffdc73;">${self.currentGroupName}</u></span>
+                    <small>(${self.villages.length} aldeias)</small>
+                </div>
                 <table class="vis" style="width:100%; margin-bottom:10px;">
                     <tr>
                         <th style="width:25%;">Alvo (X|Y):</th>
@@ -150,7 +125,6 @@ javascript:
 
             Dialog.show("tw_group_planner_dialog", html);
             
-            // Largura aumentada para 900px no PC e adaptável no telemóvel
             var calcWidth = Math.min(900, $(window).width() - 20);
             $('#tw_group_planner_dialog').css({
                 'width': calcWidth + 'px',
@@ -165,7 +139,7 @@ javascript:
         renderVillageList: function() {
             var self = this;
             if(!self.villages.length) {
-                $('#planner_results').html('<p style="color:red; text-align:center; font-weight:bold; padding:10px;">Nenhuma aldeia detetada!<br><small style="color:#000;">Abre a página de Visão Geral (Tropas/Grupos) no grupo pretendido e volta a clicar no script.</small></p>');
+                $('#planner_results').html('<p style="color:red; text-align:center; font-weight:bold; padding:10px;">Nenhuma aldeia encontrada neste grupo!</p>');
                 return;
             }
 
