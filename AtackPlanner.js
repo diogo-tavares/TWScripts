@@ -187,9 +187,10 @@ javascript:
 
         calculate: function() {
             var self = this;
-            var target = $('#planner_target').val().match(/\d{3}\|\d{3}/);
-            if(!target) { UI.ErrorMessage('Insere coordenadas de alvo válidas (ex: 555|555)'); return; }
-            var tCoords = target[0].split('|');
+            var targetMatch = $('#planner_target').val().match(/\d{3}\|\d{3}/);
+            if(!targetMatch) { UI.ErrorMessage('Insere coordenadas de alvo válidas (ex: 555|555)'); return; }
+            var targetCoordsStr = targetMatch[0];
+            var tCoords = targetCoordsStr.split('|');
 
             var dParts = $('#planner_date').val().split('.');
             var tParts = $('#planner_time').val().split(':');
@@ -197,8 +198,13 @@ javascript:
 
             var arrivalTime = new Date(dParts[2], dParts[1] - 1, dParts[0], tParts[0], tParts[1], tParts[2]);
             
+            var arrivalISOStr = dParts[2] + "-" + self.pad(dParts[1]) + "-" + self.pad(dParts[0]) + " " + 
+                                self.pad(tParts[0]) + ":" + self.pad(tParts[1]) + ":" + self.pad(tParts[2]);
+
             var results = [];
-            var bbTable = `[table][**]Origem[||]Velocidade[||]Saída (Lançar)[||]Ação[/**]\n`;
+            
+            // Cabeçalho idêntico ao TW Stats
+            var bbExport = `Plano de ataque contra a aldeia [village]${targetCoordsStr}[/village] (chegada a ${arrivalISOStr})\n\n`;
 
             $('.planner_village_unit').each(function(i) {
                 var v = self.villages[i];
@@ -214,11 +220,17 @@ javascript:
 
                 var launchTime = new Date(arrivalTime.getTime() - (travelTimeSeconds * 1000));
 
-                var launchStr = self.pad(launchTime.getDate()) + "." + 
-                                self.pad(launchTime.getMonth()+1) + " " + 
-                                self.pad(launchTime.getHours()) + ":" + 
-                                self.pad(launchTime.getMinutes()) + ":" + 
-                                self.pad(launchTime.getSeconds());
+                var dateFormatted = launchTime.getFullYear() + "-" + 
+                                    self.pad(launchTime.getMonth()+1) + "-" + 
+                                    self.pad(launchTime.getDate());
+                                    
+                var timeFormatted = self.pad(launchTime.getHours()) + ":" + 
+                                    self.pad(launchTime.getMinutes()) + ":" + 
+                                    self.pad(launchTime.getSeconds());
+
+                var displayLaunchStr = self.pad(launchTime.getDate()) + "." + 
+                                       self.pad(launchTime.getMonth()+1) + " " + 
+                                       timeFormatted;
 
                 var placeUrl = `/game.php?village=${v.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
                 if (game_data.player.sitter != "0") {
@@ -230,7 +242,9 @@ javascript:
                     coords: v.coords,
                     unit: self.unitNames[unit],
                     launchTime: launchTime,
-                    launchStr: launchStr,
+                    launchStr: displayLaunchStr,
+                    dateFormatted: dateFormatted,
+                    timeFormatted: timeFormatted,
                     placeUrl: placeUrl
                 });
             });
@@ -257,21 +271,21 @@ javascript:
                     <td><a href="${r.placeUrl}" target="_blank" class="btn">Abrir Praça</a></td>
                 </tr>`;
 
-                bbTable += `[*]${r.name} (${r.coords})[|]${r.unit}[|]${r.launchStr}[|][url=https://${document.location.host}${r.placeUrl}]Atacar[/url]\n`;
+                // Linha formatada com "Atacar" hiperligado
+                bbExport += `[url=https://${document.location.host}${r.placeUrl}]Atacar[/url] ${r.unit} da [village]${r.coords}[/village] a [i]${r.dateFormatted}[/i] [b]${r.timeFormatted}[/b]\n`;
             });
 
-            bbTable += `[/table]`;
             outHtml += `</tbody></table>`;
             
             outHtml += `<div style="margin-top:10px;">
-                <h4>Exportar Tabela BB Code (Para o Fórum / Bloco de Notas):</h4>
-                <textarea style="width:98%; height:80px;" onclick="this.select()">${bbTable}</textarea>
+                <h4>Exportar Plano (Formato TW Stats com Hiperligação):</h4>
+                <textarea style="width:98%; height:120px;" onclick="this.select()">${bbExport}</textarea>
             </div>`;
 
             $('#planner_results').html(outHtml);
         },
 
-        pad: function(n) { return n < 10 ? '0' + n : n; }
+        pad: function(n) { return n < 10 ? '0' + parseInt(n, 10) : n; }
     };
 
     groupPlanner.init();
