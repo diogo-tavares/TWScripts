@@ -6,45 +6,26 @@ javascript:
     }
 
     var groupPlanner = {
-        speeds: {},
-        unitNames: {
-            spear: "Lanceiro", sword: "Espadachim", axe: "Voador/Machado",
-            archer: "Arqueiro", spy: "Explorador", light: "Cavalaria Leve",
-            marcher: "Arqu. a Cavalo", heavy: "Cavalaria Pesada", ram: "Ariete",
-            catapult: "Catapulta", knight: "Paladino", snob: "Nobre"
-        },
-        // Valores base exatos atualizados (minutos por campo):
-        unitBaseSpeeds: {
+        // Velocidades base em minutos por campo
+        speeds: {
             spear: 18, sword: 22, axe: 18, archer: 18, spy: 9,
             light: 10, marcher: 10, heavy: 11, ram: 29, catapult: 29,
             knight: 10, snob: 34
         },
-        activeUnits: [],
+        unitNames: {
+            spear: "Lanceiro", sword: "Espadachim", axe: "Viking",
+            archer: "Arqueiro", spy: "Batedor", light: "Cavalaria Leve",
+            marcher: "Arqueiro a Cavalo", heavy: "Cavalaria Pesada", ram: "Ariete",
+            catapult: "Catapulta", knight: "Paladino", snob: "Nobre"
+        },
+        activeUnits: ['spear','sword','axe','spy','light','heavy','ram','catapult','snob','knight'],
         villages: [],
 
         init: function() {
             var self = this;
-            UI.InfoMessage('A carregar configurações do mundo...', 1000);
-            
-            $.get('/interface.php?func=get_config', function(xml) {
-                var speed = parseFloat($(xml).find('config speed').text());
-                var unitSpeed = parseFloat($(xml).find('config unit_speed').text());
-                var archers = parseInt($(xml).find('game archer').text());
-                var knight = parseInt($(xml).find('game knight').text());
-
-                var worldSpeed = speed * unitSpeed;
-                
-                self.activeUnits = ['spear','sword','axe','spy','light','heavy','ram','catapult','snob'];
-                if (archers) self.activeUnits.splice(3, 0, 'archer', 'marcher');
-                if (knight) self.activeUnits.push('knight');
-
-                $.each(self.activeUnits, function(i, u) {
-                    self.speeds[u] = self.unitBaseSpeeds[u] / worldSpeed;
-                });
-
-                self.buildUI();
-                self.loadGroups();
-            });
+            UI.InfoMessage('A iniciar planeador...', 1000);
+            self.buildUI();
+            self.loadGroups();
         },
 
         buildUI: function() {
@@ -60,11 +41,6 @@ javascript:
             var now = new Date();
             var dateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
             var timeStr = self.pad(now.getHours()) + ":" + self.pad(now.getMinutes()) + ":" + self.pad(now.getSeconds());
-
-            var unitOptions = '';
-            $.each(self.activeUnits, function(i, u) {
-                unitOptions += '<option value="' + u + '">' + self.unitNames[u] + '</option>';
-            });
 
             var html = `
             <div id="tw_group_planner" class="vis vis_item" style="position:fixed; top:60px; right:20px; z-index:99999; width:750px; max-height:85vh; overflow-y:auto; background:#f4e4c1; border:2px solid #804000; padding:10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-radius:5px;">
@@ -85,16 +61,6 @@ javascript:
                         <th>Chegada (Hora):</th>
                         <td><input type="text" id="planner_time" value="${timeStr}" size="8" /></td>
                     </tr>
-                    <tr>
-                        <th>Velocidade Geral:</th>
-                        <td colspan="3">
-                            <select id="planner_global_unit">
-                                <option value="">-- Selecionar tropa para TODAS --</option>
-                                ${unitOptions}
-                            </select>
-                            <small>(Aplica a velocidade escolhida a todas as aldeias)</small>
-                        </td>
-                    </tr>
                 </table>
                 <div style="text-align:center; margin-bottom:10px;">
                     <button class="btn btn-confirm-yes" id="btn_calculate_plan">Calcular Horários</button>
@@ -109,13 +75,6 @@ javascript:
             $('#planner_group_select').change(function(){
                 var url = $(this).val();
                 if(url) self.loadVillagesFromGroup(url);
-            });
-
-            $('#planner_global_unit').change(function(){
-                var selectedUnit = $(this).val();
-                if(selectedUnit) {
-                    $('.planner_village_unit').val(selectedUnit);
-                }
             });
 
             $('#btn_calculate_plan').click(function(){ self.calculate(); });
@@ -191,7 +150,13 @@ javascript:
                     <tr>
                         <th>Aldeia Origem</th>
                         <th>Coordenadas</th>
-                        <th>Velocidade / Tropa</th>
+                        <th>
+                            Mudar TODAS para: 
+                            <select id="planner_global_unit">
+                                <option value="">-- Escolher para todas --</option>
+                                ${unitOptions}
+                            </select>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -211,6 +176,13 @@ javascript:
 
             html += `</tbody></table>`;
             $('#planner_results').html(html);
+
+            $('#planner_global_unit').change(function(){
+                var selectedUnit = $(this).val();
+                if(selectedUnit) {
+                    $('.planner_village_unit').val(selectedUnit);
+                }
+            });
         },
 
         calculate: function() {
@@ -237,8 +209,8 @@ javascript:
                 var dy = Math.abs(parseInt(tCoords[1]) - parseInt(vCoords[1]));
                 var dist = Math.sqrt(dx * dx + dy * dy);
 
-                var travelTimeMinutes = dist * self.speeds[unit];
-                var travelTimeSeconds = Math.round(travelTimeMinutes * 60);
+                // Arredondamento exato do motor do jogo (em segundos)
+                var travelTimeSeconds = Math.round(dist * self.speeds[unit] * 60);
 
                 var launchTime = new Date(arrivalTime.getTime() - (travelTimeSeconds * 1000));
 
