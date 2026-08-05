@@ -31,9 +31,85 @@ javascript:
 
         init: function() {
             var self = this;
-            UI.InfoMessage('A iniciar planeador...', 1000);
+            UI.InfoMessage('A ler aldeias do grupo atual...', 1000);
+            self.readCurrentPageVillages();
             self.buildUI();
-            self.loadGroups();
+        },
+
+        readCurrentPageVillages: function() {
+            var self = this;
+            self.villages = [];
+
+            // Procura tabela de unidades ou tabelas de aldeias na página atual (PC e App)
+            var $rows = $('#units_table tbody tr, .vis tbody tr');
+
+            $rows.each(function() {
+                var $row = $(this);
+                var $spans = $row.find('td span[data-id]');
+                var $link = $row.find('a[href*="screen=info_village"]');
+                
+                var vId = null;
+                var name = "";
+
+                if ($spans.length) {
+                    vId = $spans.eq(0).attr('data-id');
+                    name = $row.find('td').first().text();
+                } else if ($link.length) {
+                    var href = $link.attr('href');
+                    var mId = href.match(/id=(\d+)/);
+                    if (mId) vId = mId[1];
+                    name = $link.text();
+                }
+
+                if (vId && name) {
+                    var coordsMatch = name.match(/\d{3}\|\d{3}/);
+                    if (coordsMatch) {
+                        // Evita duplicados
+                        var exists = self.villages.some(function(v){ return v.id === vId; });
+                        if (!exists) {
+                            self.villages.push({
+                                id: vId,
+                                name: name.trim(),
+                                coords: coordsMatch[0]
+                            });
+                        }
+                    }
+                }
+            });
+
+            // Se não encontrou na página atual, tenta um GET rápido ao grupo ativo
+            if (self.villages.length === 0) {
+                var currentUrl = window.location.href;
+                if (currentUrl.indexOf('screen=overview_villages') === -1) {
+                    var fetchUrl = '/game.php?village=' + game_data.village.id + '&screen=overview_villages&mode=units';
+                    if (game_data.player.sitter != "0") {
+                        fetchUrl = '/game.php?t=' + game_data.player.id + '&village=' + game_data.village.id + '&screen=overview_villages&mode=units';
+                    }
+                    $.ajax({
+                        url: fetchUrl,
+                        async: false,
+                        success: function(data) {
+                            var $html = $(data);
+                            $html.find('#units_table tbody tr').each(function(i) {
+                                if (i === 0) return;
+                                var $spans = $(this).find('td').first().find('span');
+                                if ($spans.length >= 3) {
+                                    var vId = $spans.eq(0).attr('data-id');
+                                    var vName = $spans.eq(2).text();
+                                    var coordsMatch = vName.match(/\d{3}\|\d{3}/);
+                                    if (coordsMatch && vId) {
+                                        self.villages.push({
+                                            id: vId,
+                                            name: vName.trim(),
+                                            coords: coordsMatch[0]
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+            }
         },
 
         buildUI: function() {
@@ -54,11 +130,7 @@ javascript:
             <div id="tw_group_planner" style="width:100%; box-sizing:border-box; padding:5px;">
                 <table class="vis" style="width:100%; margin-bottom:10px;">
                     <tr>
-                        <th style="width:30%;">Grupo:</th>
-                        <td><select id="planner_group_select" style="width:100%;"><option value="">A carregar grupos...</option></select></td>
-                    </tr>
-                    <tr>
-                        <th>Alvo (X|Y):</th>
+                        <th style="width:25%;">Alvo (X|Y):</th>
                         <td><input type="text" id="planner_target" value="${targetCoords}" style="width:100%; box-sizing:border-box;" /></td>
                     </tr>
                     <tr>
@@ -71,110 +143,29 @@ javascript:
                     </tr>
                 </table>
                 <div style="text-align:center; margin-bottom:10px;">
-                    <button class="btn btn-confirm-yes" id="btn_calculate_plan" style="width:100%; padding:8px; font-weight:bold;">Calcular Horários</button>
+                    <button class="btn btn-confirm-yes" id="btn_calculate_plan" style="width:100%; padding:8px; font-weight:bold; font-size:14px;">Calcular Horários</button>
                 </div>
                 <div id="planner_results" style="overflow-x:auto;"></div>
             </div>`;
 
-            // Janela adaptável: 750px no PC ou a largura total disponível no telemóvel
             Dialog.show("tw_group_planner_dialog", html);
-            var calcWidth = Math.min(750, $(window).width() - 20);
+            
+            // Largura aumentada para 900px no PC e adaptável no telemóvel
+            var calcWidth = Math.min(900, $(window).width() - 20);
             $('#tw_group_planner_dialog').css({
                 'width': calcWidth + 'px',
-                'max-width': '98vw'
+                'max-width': '95vw'
             });
 
-            $('#planner_group_select').change(function(){
-                var url = $(this).val();
-                if(url) self.loadVillagesFromGroup(url);
-            });
+            self.renderVillageList();
 
             $('#btn_calculate_plan').click(function(){ self.calculate(); });
-        },
-
-        loadGroups: function() {
-            var self = this;
-            var overviewUrl = '/game.php?village=' + game_data.village.id + '&type=own_home&mode=units&group=0&page=-1&screen=overview_villages';
-            if (game_data.player.sitter != "0") {
-                overviewUrl = '/game.php?t=' + game_data.player.id + '&village=' + game_data.village.id + '&type=own_home&mode=units&group=0&page=-1&screen=overview_villages';
-            }
-
-            $.get(overviewUrl, function(data) {
-                var $html = $(data);
-                // Procura grupos tanto em tags 'a' (PC) como em 'option' (Versão Mobile/App)
-                var $groupElements = $html.find('.group-menu-item, .vis_item a[href*="group="], select[name="group_id"] option, #group_list a');
-                var options = '<option value="">-- Seleciona um Grupo --</option>';
-                var addedGroups = {};
-
-                $groupElements.each(function() {
-                    var $this = $(this);
-                    var name = $this.text().replace('[', '').replace(']', '').trim();
-                    var href = $this.attr('href') || $this.val();
-
-                    if(name && href && !addedGroups[name] && name.toLowerCase() !== 'todos' && name.toLowerCase() !== 'wszystkie') {
-                        // Converte valor em URL se for um elemento <option>
-                        if(href.indexOf('game.php') === -1 && !isNaN(href)) {
-                            href = overviewUrl.replace('group=0', 'group=' + href);
-                        } else if(href.indexOf('page=-1') === -1) {
-                            href += '&page=-1';
-                        }
-                        
-                        addedGroups[name] = true;
-                        options += `<option value="${href}">${name}</option>`;
-                    }
-                });
-
-                // Fallback caso o seletor principal falhe na App
-                if(Object.keys(addedGroups).length === 0) {
-                    $html.find('a[href*="group="]').each(function() {
-                        var name = $(this).text().replace('[', '').replace(']', '').trim();
-                        var href = $(this).attr('href') + '&page=-1';
-                        if(name && !addedGroups[name]) {
-                            addedGroups[name] = true;
-                            options += `<option value="${href}">${name}</option>`;
-                        }
-                    });
-                }
-
-                $('#planner_group_select').html(options);
-            });
-        },
-
-        loadVillagesFromGroup: function(groupUrl) {
-            var self = this;
-            UI.InfoMessage('A obter aldeias do grupo...', 1000);
-            
-            $.get(groupUrl, function(data) {
-                var $html = $(data);
-                var $rows = $html.find('#units_table tbody tr');
-                self.villages = [];
-
-                $rows.each(function(i) {
-                    if (i === 0) return; 
-                    var $spans = $(this).find('td').first().find('span');
-                    if ($spans.length >= 3) {
-                        var vId = $spans.eq(0).attr('data-id');
-                        var name = $spans.eq(2).text();
-                        var coordsMatch = name.match(/\d{3}\|\d{3}/);
-                        
-                        if (coordsMatch && vId) {
-                            self.villages.push({
-                                id: vId,
-                                name: name.trim(),
-                                coords: coordsMatch[0]
-                            });
-                        }
-                    }
-                });
-
-                self.renderVillageList();
-            });
         },
 
         renderVillageList: function() {
             var self = this;
             if(!self.villages.length) {
-                $('#planner_results').html('<p style="color:red; text-align:center;">Nenhuma aldeia encontrada neste grupo!</p>');
+                $('#planner_results').html('<p style="color:red; text-align:center; font-weight:bold; padding:10px;">Nenhuma aldeia detetada!<br><small style="color:#000;">Abre a página de Visão Geral (Tropas/Grupos) no grupo pretendido e volta a clicar no script.</small></p>');
                 return;
             }
 
@@ -184,17 +175,18 @@ javascript:
             });
 
             var html = `
-            <div style="margin-bottom:8px; background:#e0d0b0; padding:5px; border-radius:3px;">
-                <label><b>Mudar TODAS para:</b></label>
-                <select id="planner_global_unit" style="width:100%; margin-top:3px;">
-                    <option value="">-- Escolher para todas --</option>
+            <div style="margin-bottom:8px; background:#e0d0b0; padding:8px; border-radius:3px; border:1px solid #804000;">
+                <label><b>Mudar TODAS as aldeias (${self.villages.length}) para:</b></label>
+                <select id="planner_global_unit" style="width:100%; margin-top:4px; padding:4px;">
+                    <option value="">-- Escolher tropa para todas --</option>
                     ${unitOptions}
                 </select>
             </div>
-            <table class="vis" style="width:100%; font-size:11px;">
+            <table class="vis" style="width:100%; font-size:12px;">
                 <thead>
                     <tr>
-                        <th>Aldeia</th>
+                        <th>Aldeia Origem</th>
+                        <th>Coordenadas</th>
                         <th>Tropa Base</th>
                     </tr>
                 </thead>
@@ -203,6 +195,7 @@ javascript:
             $.each(self.villages, function(i, v) {
                 html += `<tr>
                     <td><b>${v.name}</b></td>
+                    <td>${v.coords}</td>
                     <td>
                         <select class="planner_village_unit" data-index="${i}" style="width:100%;">
                             <option value="ram" selected>Ariete / Catapulta</option>
@@ -284,12 +277,13 @@ javascript:
 
             results.sort(function(a, b) { return a.launchTime - b.launchTime; });
 
-            var outHtml = `<h4 style="margin-top:15px; color:#804000;">📅 Horários de Saída</h4>
-            <table class="vis" style="width:100%; font-size:11px;">
+            var outHtml = `<h4 style="margin-top:15px; color:#804000;">📅 Horários de Saída Ordenados</h4>
+            <table class="vis" style="width:100%; font-size:12px;">
                 <thead>
                     <tr>
                         <th>Origem</th>
-                        <th>Saída</th>
+                        <th>Tropa</th>
+                        <th>Hora de Saída</th>
                         <th>Ação</th>
                     </tr>
                 </thead>
@@ -297,9 +291,10 @@ javascript:
 
             $.each(results, function(i, r) {
                 outHtml += `<tr>
-                    <td>${r.name}<br><small>(${r.unit})</small></td>
+                    <td><b>${r.name}</b></td>
+                    <td>${r.unit}</td>
                     <td><b>${r.launchStr}</b></td>
-                    <td><a href="${r.placeUrl}" target="_blank" class="btn" style="padding:2px 5px;">Praça</a></td>
+                    <td><a href="${r.placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a></td>
                 </tr>`;
 
                 bbExport += `[url=https://${document.location.host}${r.placeUrl}]Atacar[/url] ${r.unit} da [village]${r.coords}[/village] a [i]${r.dateFormatted}[/i] [b]${r.timeFormatted}[/b]\n`;
@@ -307,9 +302,9 @@ javascript:
 
             outHtml += `</tbody></table>`;
             
-            outHtml += `<div style="margin-top:10px;">
-                <b>Exportar Plano:</b>
-                <textarea style="width:100%; height:100px; box-sizing:border-box; font-size:10px;" onclick="this.select()">${bbExport}</textarea>
+            outHtml += `<div style="margin-top:15px;">
+                <b>Exportar Plano (TW Stats BBCode):</b>
+                <textarea style="width:100%; height:120px; box-sizing:border-box; font-size:11px;" onclick="this.select()">${bbExport}</textarea>
             </div>`;
 
             $('#planner_results').html(outHtml);
