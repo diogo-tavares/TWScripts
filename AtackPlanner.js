@@ -6,7 +6,7 @@ javascript:
     }
 
     var groupPlanner = {
-        // Velocidades base em minutos por campo
+        // Velocidades base exatas em minutos por campo
         speeds: {
             spear: 18, sword: 22, axe: 18, archer: 18, spy: 9,
             light: 10, marcher: 10, heavy: 11, ram: 29, catapult: 29,
@@ -203,7 +203,6 @@ javascript:
 
             var results = [];
             
-            // Cabeçalho idêntico ao TW Stats
             var bbExport = `Plano de ataque contra a aldeia [village]${targetCoordsStr}[/village] (chegada a ${arrivalISOStr})\n\n`;
 
             $('.planner_village_unit').each(function(i) {
@@ -271,7 +270,6 @@ javascript:
                     <td><a href="${r.placeUrl}" target="_blank" class="btn">Abrir Praça</a></td>
                 </tr>`;
 
-                // Linha formatada com "Atacar" hiperligado
                 bbExport += `[url=https://${document.location.host}${r.placeUrl}]Atacar[/url] ${r.unit} da [village]${r.coords}[/village] a [i]${r.dateFormatted}[/i] [b]${r.timeFormatted}[/b]\n`;
             });
 
