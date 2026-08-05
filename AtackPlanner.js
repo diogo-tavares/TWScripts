@@ -6,20 +6,19 @@ javascript:
     }
 
     var groupPlanner = {
-        // Velocidades exatas em segundos por campo (calibradas ao PT114)
         speedsInSeconds: {
-            spear: 1095.517,     // Lanceiro (18.25 min/campo)
-            sword: 1338.965,     // Espadachim (22.31 min/campo)
-            axe: 1095.517,       // Viking (18.25 min/campo)
-            archer: 1095.517,    // Arqueiro (18.25 min/campo)
-            spy: 547.758,        // Batedor (9.13 min/campo)
-            light: 608.62,       // Cavalaria Leve (10.14 min/campo)
-            marcher: 608.62,     // Arqueiro a Cavalo (10.14 min/campo)
-            heavy: 669.483,      // Cavalaria Pesada (11.16 min/campo)
-            ram: 1764.724,       // Ariete (29.41 min/campo -> dá exatamente 9:21:55)
-            catapult: 1764.724,  // Catapulta (29.41 min/campo)
-            knight: 608.62,      // Paladino (10.14 min/campo)
-            snob: 2069.31        // Nobre (34.48 min/campo)
+            spear: 1095.346,
+            sword: 1338.756,
+            axe: 1095.346,
+            archer: 1095.346,
+            spy: 547.673,
+            light: 608.525,
+            marcher: 608.525,
+            heavy: 669.378,
+            ram: 1764.724,
+            catapult: 1764.724,
+            knight: 608.525,
+            snob: 2068.986
         },
         unitNames: {
             spear: "Lanceiro", sword: "Espadachim", axe: "Viking",
@@ -52,35 +51,35 @@ javascript:
             var timeStr = self.pad(now.getHours()) + ":" + self.pad(now.getMinutes()) + ":" + self.pad(now.getSeconds());
 
             var html = `
-            <div id="tw_group_planner" class="vis vis_item" style="position:fixed; top:60px; right:20px; z-index:99999; width:750px; max-height:85vh; overflow-y:auto; background:#f4e4c1; border:2px solid #804000; padding:10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-radius:5px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #804000; padding-bottom:5px;">
-                    <h3 style="margin:0; color:#804000;">🏹 Planeador de Ataques por Grupo</h3>
-                    <button class="btn btn-close" id="close_planner" style="float:right;">X</button>
-                </div>
+            <div id="tw_group_planner" style="max-width:100%; box-sizing:border-box; padding:5px;">
                 <table class="vis" style="width:100%; margin-bottom:10px;">
                     <tr>
                         <th>Grupo:</th>
-                        <td><select id="planner_group_select"><option value="">A carregar...</option></select></td>
-                        <th>Alvo (X|Y):</th>
-                        <td><input type="text" id="planner_target" value="${targetCoords}" size="8" /></td>
+                        <td><select id="planner_group_select" style="width:100%;"><option value="">A carregar...</option></select></td>
                     </tr>
                     <tr>
-                        <th>Chegada (Data):</th>
-                        <td><input type="text" id="planner_date" value="${dateStr}" size="10" /></td>
-                        <th>Chegada (Hora):</th>
-                        <td><input type="text" id="planner_time" value="${timeStr}" size="8" /></td>
+                        <th>Alvo (X|Y):</th>
+                        <td><input type="text" id="planner_target" value="${targetCoords}" style="width:100%; box-sizing:border-box;" /></td>
+                    </tr>
+                    <tr>
+                        <th>Data Chegada:</th>
+                        <td><input type="text" id="planner_date" value="${dateStr}" style="width:100%; box-sizing:border-box;" /></td>
+                    </tr>
+                    <tr>
+                        <th>Hora Chegada:</th>
+                        <td><input type="text" id="planner_time" value="${timeStr}" style="width:100%; box-sizing:border-box;" /></td>
                     </tr>
                 </table>
                 <div style="text-align:center; margin-bottom:10px;">
-                    <button class="btn btn-confirm-yes" id="btn_calculate_plan">Calcular Horários</button>
+                    <button class="btn btn-confirm-yes" id="btn_calculate_plan" style="width:100%; padding:8px;">Calcular Horários</button>
                 </div>
-                <div id="planner_results"></div>
+                <div id="planner_results" style="overflow-x:auto;"></div>
             </div>`;
 
-            $('body').append(html);
+            // Usa o sistema de janelas nativas do Tribos para ser 100% compatível com a App
+            Dialog.show("tw_group_planner_dialog", html);
+            $('#tw_group_planner_dialog').css({'max-width': '95vw', 'width': '600px'});
 
-            $('#close_planner').click(function(){ $('#tw_group_planner').remove(); });
-            
             $('#planner_group_select').change(function(){
                 var url = $(this).val();
                 if(url) self.loadVillagesFromGroup(url);
@@ -154,28 +153,28 @@ javascript:
                 unitOptions += `<option value="${u}">${self.unitNames[u]}</option>`;
             });
 
-            var html = `<table class="vis" style="width:100%;">
+            var html = `
+            <div style="margin-bottom:8px; background:#e0d0b0; padding:5px; border-radius:3px;">
+                <label><b>Mudar TODAS para:</b></label>
+                <select id="planner_global_unit" style="width:100%; margin-top:3px;">
+                    <option value="">-- Escolher para todas --</option>
+                    ${unitOptions}
+                </select>
+            </div>
+            <table class="vis" style="width:100%; font-size:11px;">
                 <thead>
                     <tr>
-                        <th>Aldeia Origem</th>
-                        <th>Coordenadas</th>
-                        <th>
-                            Mudar TODAS para: 
-                            <select id="planner_global_unit">
-                                <option value="">-- Escolher para todas --</option>
-                                ${unitOptions}
-                            </select>
-                        </th>
+                        <th>Aldeia</th>
+                        <th>Tropa</th>
                     </tr>
                 </thead>
                 <tbody>`;
 
             $.each(self.villages, function(i, v) {
                 html += `<tr>
-                    <td>${v.name}</td>
-                    <td>${v.coords}</td>
+                    <td><b>${v.name}</b></td>
                     <td>
-                        <select class="planner_village_unit" data-index="${i}">
+                        <select class="planner_village_unit" data-index="${i}" style="width:100%;">
                             <option value="ram" selected>Ariete / Catapulta</option>
                             ${unitOptions}
                         </select>
@@ -197,21 +196,19 @@ javascript:
         calculate: function() {
             var self = this;
             var targetMatch = $('#planner_target').val().match(/\d{3}\|\d{3}/);
-            if(!targetMatch) { UI.ErrorMessage('Insere coordenadas de alvo válidas (ex: 555|555)'); return; }
+            if(!targetMatch) { UI.ErrorMessage('Insere coordenadas válidas (ex: 555|555)'); return; }
             var targetCoordsStr = targetMatch[0];
             var tCoords = targetCoordsStr.split('|');
 
             var dParts = $('#planner_date').val().split('.');
             var tParts = $('#planner_time').val().split(':');
-            if(dParts.length < 3 || tParts.length < 3) { UI.ErrorMessage('Formato de Data (DD.MM.YYYY) ou Hora (HH:MM:SS) inválido!'); return; }
+            if(dParts.length < 3 || tParts.length < 3) { UI.ErrorMessage('Formato de Data/Hora inválido!'); return; }
 
             var arrivalTime = new Date(dParts[2], dParts[1] - 1, dParts[0], tParts[0], tParts[1], tParts[2]);
-            
             var arrivalISOStr = dParts[2] + "-" + self.pad(dParts[1]) + "-" + self.pad(dParts[0]) + " " + 
                                 self.pad(tParts[0]) + ":" + self.pad(tParts[1]) + ":" + self.pad(tParts[2]);
 
             var results = [];
-            
             var bbExport = `Plano de ataque contra a aldeia [village]${targetCoordsStr}[/village] (chegada a ${arrivalISOStr})\n\n`;
 
             $('.planner_village_unit').each(function(i) {
@@ -223,9 +220,7 @@ javascript:
                 var dy = Math.abs(parseInt(tCoords[1]) - parseInt(vCoords[1]));
                 var dist = Math.sqrt(dx * dx + dy * dy);
 
-                // Duração em segundos exata baseada nas coordenadas reais
                 var travelTimeSeconds = Math.round(dist * self.speedsInSeconds[unit]);
-
                 var launchTime = new Date(arrivalTime.getTime() - (travelTimeSeconds * 1000));
 
                 var dateFormatted = launchTime.getFullYear() + "-" + 
@@ -259,13 +254,12 @@ javascript:
 
             results.sort(function(a, b) { return a.launchTime - b.launchTime; });
 
-            var outHtml = `<h4 style="margin-top:15px; color:#804000;">📅 Horários de Envio (Ordenados)</h4>
-            <table class="vis" style="width:100%;">
+            var outHtml = `<h4 style="margin-top:15px; color:#804000;">📅 Horários de Saída</h4>
+            <table class="vis" style="width:100%; font-size:11px;">
                 <thead>
                     <tr>
                         <th>Origem</th>
-                        <th>Tropa Base</th>
-                        <th>Hora de Saída</th>
+                        <th>Saída</th>
                         <th>Ação</th>
                     </tr>
                 </thead>
@@ -273,10 +267,9 @@ javascript:
 
             $.each(results, function(i, r) {
                 outHtml += `<tr>
-                    <td>${r.name}</td>
-                    <td>${r.unit}</td>
+                    <td>${r.name}<br><small>(${r.unit})</small></td>
                     <td><b>${r.launchStr}</b></td>
-                    <td><a href="${r.placeUrl}" target="_blank" class="btn">Abrir Praça</a></td>
+                    <td><a href="${r.placeUrl}" target="_blank" class="btn" style="padding:2px 5px;">Praça</a></td>
                 </tr>`;
 
                 bbExport += `[url=https://${document.location.host}${r.placeUrl}]Atacar[/url] ${r.unit} da [village]${r.coords}[/village] a [i]${r.dateFormatted}[/i] [b]${r.timeFormatted}[/b]\n`;
@@ -285,8 +278,8 @@ javascript:
             outHtml += `</tbody></table>`;
             
             outHtml += `<div style="margin-top:10px;">
-                <h4>Exportar Plano:</h4>
-                <textarea style="width:98%; height:120px;" onclick="this.select()">${bbExport}</textarea>
+                <b>Exportar Plano:</b>
+                <textarea style="width:100%; height:100px; box-sizing:border-box; font-size:10px;" onclick="this.select()">${bbExport}</textarea>
             </div>`;
 
             $('#planner_results').html(outHtml);
