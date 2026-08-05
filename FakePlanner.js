@@ -259,7 +259,7 @@ javascript:
                 var rowStyle = r.isNight ? 'style="background-color:#ffe6e6;"' : '';
                 outHtml += `<tr ${rowStyle}>
                     <td><b>${r.name}</b></td>
-                    <td>[village]${r.target}[/village]</td>
+                    <td><b>${r.target}</b></td>
                     <td><b>${r.launchStr}</b> ${r.isNight ? '🌙' : ''}</td>
                     <td><a href="${r.placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a></td>
                 </tr>`;
