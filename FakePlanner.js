@@ -19,7 +19,7 @@ javascript:
     var fakePlanner = {
         ramSpeedInSeconds: 1764.724,
         unitName: "Ariete",
-        activeVillages: [],
+        villages: [],
         currentGroupName: "Todos",
         currentResults: [],
 
@@ -47,7 +47,7 @@ javascript:
 
         readCurrentPageVillages: function() {
             var self = this;
-            self.activeVillages = [];
+            self.villages = [];
 
             $('#units_table tbody tr').each(function() {
                 var $row = $(this);
@@ -59,7 +59,7 @@ javascript:
                     var coordsMatch = name.match(/\d{3}\|\d{3}/);
                     
                     if (coordsMatch && vId) {
-                        self.activeVillages.push({
+                        self.villages.push({
                             id: vId,
                             name: name.trim(),
                             coords: coordsMatch[0]
@@ -82,7 +82,7 @@ javascript:
             <div id="tw_fake_planner" style="width:100%; box-sizing:border-box; padding:5px;">
                 <div style="background:#804000; color:#fff; padding:6px 10px; font-weight:bold; border-radius:3px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
                     <span>🎭 Planeador de Fakes | Grupo: <u style="color:#ffdc73;">${self.currentGroupName}</u></span>
-                    <small>(${self.activeVillages.length} aldeias | até ${self.activeVillages.length * 5} fakes)</small>
+                    <small>(${self.villages.length} aldeias | até ${self.villages.length * 5} fakes)</small>
                 </div>
                 <table class="vis" style="width:100%; margin-bottom:10px;">
                     <tr>
@@ -141,12 +141,11 @@ javascript:
                 if($.inArray(el, uniqueTargets) === -1) uniqueTargets.push(el);
             });
 
-            if (!self.activeVillages.length) {
+            if (!self.villages.length) {
                 UI.ErrorMessage('Nenhuma aldeia encontrada neste grupo!');
                 return;
             }
 
-            // Parsing Data/Hora Mínima de Envio
             var minDParts = $('#planner_min_date').val().split('.');
             var minTParts = $('#planner_min_time').val().split(':');
             if (minDParts.length < 3 || minTParts.length < 3) {
@@ -155,7 +154,6 @@ javascript:
             }
             var minLaunchTime = new Date(minDParts[2], minDParts[1] - 1, minDParts[0], minTParts[0], minTParts[1], minTParts[2]);
 
-            // Parsing Data/Hora de Chegada
             var dParts = $('#planner_date').val().split('.');
             var tParts = $('#planner_time').val().split(':');
             if (dParts.length < 3 || tParts.length < 3) {
@@ -166,9 +164,8 @@ javascript:
             var arrivalISOStr = dParts[2] + "-" + self.pad(dParts[1]) + "-" + self.pad(dParts[0]) + " " + 
                                 self.pad(tParts[0]) + ":" + self.pad(tParts[1]) + ":" + self.pad(tParts[2]);
 
-            // Gera todos os pares possíveis e descarta os que saem antes da data/hora mínima
             var allPossiblePairs = [];
-            $.each(self.activeVillages, function(vIdx, v) {
+            $.each(self.villages, function(vIdx, v) {
                 $.each(uniqueTargets, function(tIdx, target) {
                     var lTime = self.getLaunchTime(v.coords, target, arrivalTime);
                     if (lTime >= minLaunchTime) {
@@ -183,12 +180,11 @@ javascript:
 
             allPossiblePairs.sort(function(a, b) { return a.launchTime - b.launchTime; });
 
-            // Alocação sequencial por ordem de saída (máx 5 por origem, 1 por alvo)
             var originCounts = {};
             var assignedTargets = {};
             var assignedPlans = [];
 
-            $.each(self.activeVillages, function(i, v) { originCounts[v.id] = 0; });
+            $.each(self.villages, function(i, v) { originCounts[v.id] = 0; });
 
             for (var i = 0; i < allPossiblePairs.length; i++) {
                 var pair = allPossiblePairs[i];
@@ -273,7 +269,6 @@ javascript:
 
             $('#planner_results').html(outHtml);
 
-            // Ação do Botão "Lista de aldeias restantes"
             $('#btn_remaining_villages').click(function(){
                 var sentTargets = [];
                 $('.fake_sent_check:checked').each(function(){
