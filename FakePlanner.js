@@ -5,6 +5,7 @@ javascript:
         return;
     }
 
+    // 1.º Clique: Redirecionamento para Visão Geral (Tropas)
     if (window.location.href.indexOf('screen=overview_villages') === -1 || window.location.href.indexOf('mode=units') === -1) {
         UI.InfoMessage('A redirecionar para a Visão Geral (Tropas)...', 1500);
         var targetUrl = '/game.php?village=' + game_data.village.id + '&screen=overview_villages&mode=units';
@@ -20,6 +21,7 @@ javascript:
         unitName: "Ariete",
         activeVillages: [],
         currentGroupName: "Todos",
+        currentResults: [],
 
         init: function() {
             var self = this;
@@ -77,14 +79,14 @@ javascript:
             <div id="tw_fake_planner" style="width:100%; box-sizing:border-box; padding:5px;">
                 <div style="background:#804000; color:#fff; padding:6px 10px; font-weight:bold; border-radius:3px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
                     <span>🎭 Planeador de Fakes | Grupo: <u style="color:#ffdc73;">${self.currentGroupName}</u></span>
-                    <small>(${self.activeVillages.length} aldeias disponíveis)</small>
+                    <small>(${self.activeVillages.length} aldeias | até ${self.activeVillages.length * 5} fakes)</small>
                 </div>
                 <table class="vis" style="width:100%; margin-bottom:10px;">
                     <tr>
                         <th style="width:25%;">Alvos (X|Y):</th>
                         <td>
                             <textarea id="planner_targets" placeholder="111|111 222|222 333|333 ..." style="width:100%; height:60px; box-sizing:border-box; font-family:monospace;"></textarea>
-                            <small style="color:#666;">Podes colar as coordenadas separadas por espaços ou quebras de linha.</small>
+                            <small style="color:#666;">Cola as coordenadas dos alvos separadas por espaços ou linhas.</small>
                         </td>
                     </tr>
                     <tr>
@@ -119,9 +121,15 @@ javascript:
             var targetMatches = rawTargets.match(/\d{3}\|\d{3}/g);
 
             if (!targetMatches || targetMatches.length === 0) {
-                UI.ErrorMessage('Insere pelo menos uma coordenada de alvo válida (ex: 111|111)');
+                UI.ErrorMessage('Insere pelo menos uma coordenada de alvo válida.');
                 return;
             }
+
+            // Remove alvos duplicados para garantir 1 ataque por aldeia alvo
+            var uniqueTargets = [];
+            $.each(targetMatches, function(i, el){
+                if($.inArray(el, uniqueTargets) === -1) uniqueTargets.push(el);
+            });
 
             if (!self.activeVillages.length) {
                 UI.ErrorMessage('Nenhuma aldeia encontrada neste grupo!');
@@ -139,114 +147,53 @@ javascript:
             var arrivalISOStr = dParts[2] + "-" + self.pad(dParts[1]) + "-" + self.pad(dParts[0]) + " " + 
                                 self.pad(tParts[0]) + ":" + self.pad(tParts[1]) + ":" + self.pad(tParts[2]);
 
-            var availableOrigins = self.activeVillages.slice();
-            var targetsToAssign = targetMatches.slice();
-
-            var assignedPlans = [];
-            var unassignedTargets = [];
-
-            for (var i = 0; i < targetsToAssign.length; i++) {
-                var target = targetsToAssign[i];
-                if (availableOrigins.length > 0) {
-                    var origin = availableOrigins.shift();
-                    assignedPlans.push({
-                        origin: origin,
-                        target: target
+            // Gera todos os pares possíveis e ordena pelo horário de saída mais cedo
+            var allPossiblePairs = [];
+            $.each(self.activeVillages, function(vIdx, v) {
+                $.each(uniqueTargets, function(tIdx, target) {
+                    var lTime = self.getLaunchTime(v.coords, target, arrivalTime);
+                    allPossiblePairs.push({
+                        origin: v,
+                        target: target,
+                        launchTime: lTime
                     });
-                } else {
-                    unassignedTargets.push(target);
-                }
-            }
-
-            var hasBadTimes = true;
-            var maxLoopSafety = 500; 
-            var loops = 0;
-
-            while (hasBadTimes && availableOrigins.length > 0 && loops < maxLoopSafety) {
-                loops++;
-                hasBadTimes = false;
-
-                for (var j = 0; j < assignedPlans.length; j++) {
-                    var plan = assignedPlans[j];
-                    
-                    var launchTime = self.getLaunchTime(plan.origin.coords, plan.target, arrivalTime);
-                    var hour = launchTime.getHours();
-
-                    if (hour >= 1 && hour < 9) {
-                        hasBadTimes = true;
-
-                        if (availableOrigins.length > 0) {
-                            var newOrigin = availableOrigins.shift();
-                            availableOrigins.push(plan.origin);
-                            plan.origin = newOrigin;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-
-            var results = [];
-            var badTimeCount = 0;
-            var bbExport = `Plano de Fakes (chegada a ${arrivalISOStr})\n\n`;
-
-            $.each(assignedPlans, function(idx, item) {
-                var launchTime = self.getLaunchTime(item.origin.coords, item.target, arrivalTime);
-                var hour = launchTime.getHours();
-                var isNight = (hour >= 1 && hour < 9);
-                
-                if (isNight) badTimeCount++;
-
-                var dateFormatted = launchTime.getFullYear() + "-" + 
-                                    self.pad(launchTime.getMonth()+1) + "-" + 
-                                    self.pad(launchTime.getDate());
-                                    
-                var timeFormatted = self.pad(launchTime.getHours()) + ":" + 
-                                    self.pad(launchTime.getMinutes()) + ":" + 
-                                    self.pad(launchTime.getSeconds());
-
-                var displayLaunchStr = self.pad(launchTime.getDate()) + "." + 
-                                       self.pad(launchTime.getMonth()+1) + " " + 
-                                       timeFormatted;
-
-                var tCoords = item.target.split('|');
-                var placeUrl = `/game.php?village=${item.origin.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
-                if (game_data.player.sitter != "0") {
-                    placeUrl = `/game.php?t=${game_data.player.id}&village=${item.origin.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
-                }
-
-                results.push({
-                    name: item.origin.name,
-                    coords: item.origin.coords,
-                    target: item.target,
-                    unit: self.unitName,
-                    launchTime: launchTime,
-                    launchStr: displayLaunchStr,
-                    dateFormatted: dateFormatted,
-                    timeFormatted: timeFormatted,
-                    placeUrl: placeUrl,
-                    isNight: isNight
                 });
             });
 
-            results.sort(function(a, b) { return a.launchTime - b.launchTime; });
+            allPossiblePairs.sort(function(a, b) { return a.launchTime - b.launchTime; });
 
-            var statusMsg = "";
-            if (badTimeCount > 0) {
-                statusMsg = `<div style="background:#ffcccc; color:#990000; padding:6px; border-radius:3px; margin-bottom:8px; font-weight:bold;">
-                    ⚠️ Atenção: ${badTimeCount} fake(s) têm de sair na madrugada (01:00h - 09:00h) por falta de aldeias suplentes para troca.
-                </div>`;
-            } else {
-                statusMsg = `<div style="background:#d4edda; color:#155724; padding:6px; border-radius:3px; margin-bottom:8px; font-weight:bold;">
-                    ✅ Todos os horários de saída estão fora da madrugada (01:00h - 09:00h)!
-                </div>`;
+            // Alocação gulosa (prioridade: saída mais cedo, máx 5 por origem, 1 por alvo)
+            var originCounts = {};
+            var assignedTargets = {};
+            var assignedPlans = [];
+
+            $.each(self.activeVillages, function(i, v) { originCounts[v.id] = 0; });
+
+            for (var i = 0; i < allPossiblePairs.length; i++) {
+                var pair = allPossiblePairs[i];
+                var vId = pair.origin.id;
+                var target = pair.target;
+
+                if (!assignedTargets[target] && originCounts[vId] < 5) {
+                    assignedPlans.push(pair);
+                    assignedTargets[target] = true;
+                    originCounts[vId]++;
+                }
             }
 
-            var outHtml = statusMsg + `
-            <h4 style="margin-top:10px; color:#804000;">📅 Ordem de Envio dos Fakes (${results.length})</h4>
+            assignedPlans.sort(function(a, b) { return a.launchTime - b.launchTime; });
+            self.currentResults = assignedPlans;
+
+            var bbExport = `Plano de Fakes (chegada a ${arrivalISOStr})\n\n`;
+
+            var outHtml = `
+            <div style="background:#e0d0b0; padding:6px 10px; font-weight:bold; border-radius:3px; margin-bottom:8px; border:1px solid #804000;">
+                📊 Fakes atribuídos: ${assignedPlans.length} / ${uniqueTargets.length} alvos
+            </div>
             <table class="vis" style="width:100%; font-size:12px;">
                 <thead>
                     <tr>
+                        <th style="width:30px; text-align:center;">Feito</th>
                         <th>Origem</th>
                         <th>Alvo</th>
                         <th>Hora de Saída</th>
@@ -255,26 +202,74 @@ javascript:
                 </thead>
                 <tbody>`;
 
-            $.each(results, function(i, r) {
-                var rowStyle = r.isNight ? 'style="background-color:#ffe6e6;"' : '';
-                outHtml += `<tr ${rowStyle}>
-                    <td><b>${r.name}</b></td>
+            $.each(assignedPlans, function(i, r) {
+                var dateFormatted = r.launchTime.getFullYear() + "-" + 
+                                    self.pad(r.launchTime.getMonth()+1) + "-" + 
+                                    self.pad(r.launchTime.getDate());
+                                    
+                var timeFormatted = self.pad(r.launchTime.getHours()) + ":" + 
+                                    self.pad(r.launchTime.getMinutes()) + ":" + 
+                                    self.pad(r.launchTime.getSeconds());
+
+                var displayLaunchStr = self.pad(r.launchTime.getDate()) + "." + 
+                                       self.pad(r.launchTime.getMonth()+1) + " " + 
+                                       timeFormatted;
+
+                var tCoords = r.target.split('|');
+                var placeUrl = `/game.php?village=${r.origin.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
+                if (game_data.player.sitter != "0") {
+                    placeUrl = `/game.php?t=${game_data.player.id}&village=${r.origin.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
+                }
+
+                outHtml += `<tr>
+                    <td style="text-align:center;">
+                        <input type="checkbox" class="fake_sent_check" data-target="${r.target}" />
+                    </td>
+                    <td><b>${r.origin.name}</b></td>
                     <td><b>${r.target}</b></td>
-                    <td><b>${r.launchStr}</b> ${r.isNight ? '🌙' : ''}</td>
-                    <td><a href="${r.placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a></td>
+                    <td><b>${displayLaunchStr}</b></td>
+                    <td><a href="${placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a></td>
                 </tr>`;
 
-                bbExport += `Lançar ${r.unit} [b]fake[/b] da [village]${r.coords}[/village] contra a aldeia [village]${r.target}[/village] a [i]${r.dateFormatted}[/i] [b]${r.timeFormatted}[/b]\n`;
+                bbExport += `Lançar ${self.unitName} [b]fake[/b] da [village]${r.origin.coords}[/village] contra a aldeia [village]${r.target}[/village] a [i]${dateFormatted}[/i] [b]${timeFormatted}[/b]\n`;
             });
 
             outHtml += `</tbody></table>`;
-            
+
+            outHtml += `
+            <div style="margin-top:15px; text-align:center;">
+                <button class="btn btn-default" id="btn_remaining_villages" style="width:100%; padding:6px; font-weight:bold;">Lista de aldeias restantes</button>
+            </div>
+            <div id="remaining_container" style="display:none; margin-top:8px;">
+                <b>Coordenadas dos Alvos Pendentes:</b>
+                <textarea id="remaining_targets_box" style="width:100%; height:70px; box-sizing:border-box; font-family:monospace; font-size:11px;" onclick="this.select()"></textarea>
+            </div>`;
+
             outHtml += `<div style="margin-top:15px;">
                 <b>Exportar Plano em BBCode:</b>
                 <textarea style="width:100%; height:120px; box-sizing:border-box; font-size:11px;" onclick="this.select()">${bbExport}</textarea>
             </div>`;
 
             $('#planner_results').html(outHtml);
+
+            // Ação do Botão "Lista de aldeias restantes"
+            $('#btn_remaining_villages').click(function(){
+                var sentTargets = [];
+                $('.fake_sent_check:checked').each(function(){
+                    sentTargets.push($(this).attr('data-target'));
+                });
+
+                var remaining = [];
+                $.each(uniqueTargets, function(idx, t){
+                    if ($.inArray(t, sentTargets) === -1) {
+                        remaining.push(t);
+                    }
+                });
+
+                $('#remaining_targets_box').val(remaining.join(' '));
+                $('#remaining_container').show();
+                UI.InfoMessage('Lista atualizada: ' + remaining.length + ' alvos restantes.', 1500);
+            });
         },
 
         getLaunchTime: function(originCoordsStr, targetCoordsStr, arrivalTime) {
