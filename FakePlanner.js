@@ -59,7 +59,7 @@ javascript:
                     var coordsMatch = name.match(/\d{3}\|\d{3}/);
                     
                     if (coordsMatch && vId) {
-                        self.villages.push({
+                        self.activeVillages.push({
                             id: vId,
                             name: name.trim(),
                             coords: coordsMatch[0]
@@ -72,8 +72,11 @@ javascript:
         buildUI: function() {
             var self = this;
             var now = new Date();
-            var dateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
-            var timeStr = "08:00:00";
+            var minDateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
+            var minTimeStr = self.pad(now.getHours()) + ":" + self.pad(now.getMinutes()) + ":" + self.pad(now.getSeconds());
+
+            var arrDateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
+            var arrTimeStr = "08:00:00";
 
             var html = `
             <div id="tw_fake_planner" style="width:100%; box-sizing:border-box; padding:5px;">
@@ -83,19 +86,27 @@ javascript:
                 </div>
                 <table class="vis" style="width:100%; margin-bottom:10px;">
                     <tr>
-                        <th style="width:25%;">Alvos (X|Y):</th>
+                        <th style="width:30%;">Alvos (X|Y):</th>
                         <td>
                             <textarea id="planner_targets" placeholder="111|111 222|222 333|333 ..." style="width:100%; height:60px; box-sizing:border-box; font-family:monospace;"></textarea>
                             <small style="color:#666;">Cola as coordenadas dos alvos separadas por espaços ou linhas.</small>
                         </td>
                     </tr>
                     <tr>
+                        <th>Data Mínima Envio:</th>
+                        <td><input type="text" id="planner_min_date" value="${minDateStr}" style="width:100%; box-sizing:border-box;" /></td>
+                    </tr>
+                    <tr>
+                        <th>Hora Mínima Envio:</th>
+                        <td><input type="text" id="planner_min_time" value="${minTimeStr}" style="width:100%; box-sizing:border-box;" /></td>
+                    </tr>
+                    <tr>
                         <th>Data Chegada:</th>
-                        <td><input type="text" id="planner_date" value="${dateStr}" style="width:100%; box-sizing:border-box;" /></td>
+                        <td><input type="text" id="planner_date" value="${arrDateStr}" style="width:100%; box-sizing:border-box;" /></td>
                     </tr>
                     <tr>
                         <th>Hora Chegada:</th>
-                        <td><input type="text" id="planner_time" value="${timeStr}" style="width:100%; box-sizing:border-box;" /></td>
+                        <td><input type="text" id="planner_time" value="${arrTimeStr}" style="width:100%; box-sizing:border-box;" /></td>
                     </tr>
                 </table>
                 <div style="text-align:center; margin-bottom:10px;">
@@ -135,31 +146,44 @@ javascript:
                 return;
             }
 
+            // Parsing Data/Hora Mínima de Envio
+            var minDParts = $('#planner_min_date').val().split('.');
+            var minTParts = $('#planner_min_time').val().split(':');
+            if (minDParts.length < 3 || minTParts.length < 3) {
+                UI.ErrorMessage('Formato de Data/Hora Mínima de Envio inválido!');
+                return;
+            }
+            var minLaunchTime = new Date(minDParts[2], minDParts[1] - 1, minDParts[0], minTParts[0], minTParts[1], minTParts[2]);
+
+            // Parsing Data/Hora de Chegada
             var dParts = $('#planner_date').val().split('.');
             var tParts = $('#planner_time').val().split(':');
             if (dParts.length < 3 || tParts.length < 3) {
-                UI.ErrorMessage('Formato de Data (DD.MM.YYYY) ou Hora (HH:MM:SS) inválido!');
+                UI.ErrorMessage('Formato de Data ou Hora de Chegada inválido!');
                 return;
             }
-
             var arrivalTime = new Date(dParts[2], dParts[1] - 1, dParts[0], tParts[0], tParts[1], tParts[2]);
             var arrivalISOStr = dParts[2] + "-" + self.pad(dParts[1]) + "-" + self.pad(dParts[0]) + " " + 
                                 self.pad(tParts[0]) + ":" + self.pad(tParts[1]) + ":" + self.pad(tParts[2]);
 
+            // Gera todos os pares possíveis e descarta os que saem antes da data/hora mínima
             var allPossiblePairs = [];
             $.each(self.activeVillages, function(vIdx, v) {
                 $.each(uniqueTargets, function(tIdx, target) {
                     var lTime = self.getLaunchTime(v.coords, target, arrivalTime);
-                    allPossiblePairs.push({
-                        origin: v,
-                        target: target,
-                        launchTime: lTime
-                    });
+                    if (lTime >= minLaunchTime) {
+                        allPossiblePairs.push({
+                            origin: v,
+                            target: target,
+                            launchTime: lTime
+                        });
+                    }
                 });
             });
 
             allPossiblePairs.sort(function(a, b) { return a.launchTime - b.launchTime; });
 
+            // Alocação sequencial por ordem de saída (máx 5 por origem, 1 por alvo)
             var originCounts = {};
             var assignedTargets = {};
             var assignedPlans = [];
@@ -249,6 +273,7 @@ javascript:
 
             $('#planner_results').html(outHtml);
 
+            // Ação do Botão "Lista de aldeias restantes"
             $('#btn_remaining_villages').click(function(){
                 var sentTargets = [];
                 $('.fake_sent_check:checked').each(function(){
