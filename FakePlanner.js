@@ -59,7 +59,7 @@ javascript:
                     var coordsMatch = name.match(/\d{3}\|\d{3}/);
                     
                     if (coordsMatch && vId) {
-                        self.activeVillages.push({
+                        self.villages.push({
                             id: vId,
                             name: name.trim(),
                             coords: coordsMatch[0]
@@ -73,7 +73,7 @@ javascript:
             var self = this;
             var now = new Date();
             var dateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
-            var timeStr = self.pad(now.getHours()) + ":" + self.pad(now.getMinutes()) + ":" + self.pad(now.getSeconds());
+            var timeStr = "08:00:00";
 
             var html = `
             <div id="tw_fake_planner" style="width:100%; box-sizing:border-box; padding:5px;">
@@ -125,7 +125,6 @@ javascript:
                 return;
             }
 
-            // Remove alvos duplicados para garantir 1 ataque por aldeia alvo
             var uniqueTargets = [];
             $.each(targetMatches, function(i, el){
                 if($.inArray(el, uniqueTargets) === -1) uniqueTargets.push(el);
@@ -147,7 +146,6 @@ javascript:
             var arrivalISOStr = dParts[2] + "-" + self.pad(dParts[1]) + "-" + self.pad(dParts[0]) + " " + 
                                 self.pad(tParts[0]) + ":" + self.pad(tParts[1]) + ":" + self.pad(tParts[2]);
 
-            // Gera todos os pares possíveis e ordena pelo horário de saída mais cedo
             var allPossiblePairs = [];
             $.each(self.activeVillages, function(vIdx, v) {
                 $.each(uniqueTargets, function(tIdx, target) {
@@ -162,7 +160,6 @@ javascript:
 
             allPossiblePairs.sort(function(a, b) { return a.launchTime - b.launchTime; });
 
-            // Alocação gulosa (prioridade: saída mais cedo, máx 5 por origem, 1 por alvo)
             var originCounts = {};
             var assignedTargets = {};
             var assignedPlans = [];
@@ -252,7 +249,6 @@ javascript:
 
             $('#planner_results').html(outHtml);
 
-            // Ação do Botão "Lista de aldeias restantes"
             $('#btn_remaining_villages').click(function(){
                 var sentTargets = [];
                 $('.fake_sent_check:checked').each(function(){
