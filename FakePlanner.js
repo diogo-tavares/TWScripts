@@ -102,7 +102,7 @@ javascript:
                     </tr>
                     <tr>
                         <th>Hora Máxima Chegada:</th>
-                        <td><input type="text" id="planner_max_time" value="08:30:00" style="width:100%; box-sizing:border-box;" /></td>
+                        <td><input type="text" id="planner_max_time" value="23:00:00" style="width:100%; box-sizing:border-box;" /></td>
                     </tr>
                     <tr>
                         <th>Alvos (X|Y):</th>
