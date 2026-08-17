@@ -21,7 +21,6 @@ javascript:
         unitName: "Ariete",
         villages: [],
         currentGroupName: "Todos",
-        currentResults: [],
 
         init: function() {
             var self = this;
@@ -69,14 +68,22 @@ javascript:
             });
         },
 
+        getServerDateTime: function() {
+            var serverDateStr = $('#serverDate').text().trim();
+            var serverTimeStr = $('#serverTime').text().trim();
+            
+            if (serverDateStr && serverTimeStr) {
+                var dParts = serverDateStr.split('/');
+                var tParts = serverTimeStr.split(':');
+                return new Date(dParts[2], dParts[1] - 1, dParts[0], tParts[0], tParts[1], tParts[2]);
+            }
+            return new Date();
+        },
+
         buildUI: function() {
             var self = this;
-            var now = new Date();
-            var minDateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
-            var minTimeStr = self.pad(now.getHours()) + ":" + self.pad(now.getMinutes()) + ":" + self.pad(now.getSeconds());
-
+            var now = self.getServerDateTime();
             var arrDateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
-            var arrTimeStr = "08:00:00";
 
             var html = `
             <div id="tw_fake_planner" style="width:100%; box-sizing:border-box; padding:5px;">
@@ -86,27 +93,23 @@ javascript:
                 </div>
                 <table class="vis" style="width:100%; margin-bottom:10px;">
                     <tr>
-                        <th style="width:30%;">Alvos (X|Y):</th>
+                        <th style="width:30%;">Dia de Chegada:</th>
+                        <td><input type="text" id="planner_arr_date" value="${arrDateStr}" style="width:100%; box-sizing:border-box;" /></td>
+                    </tr>
+                    <tr>
+                        <th>Hora Mínima Chegada:</th>
+                        <td><input type="text" id="planner_min_time" value="08:00:00" style="width:100%; box-sizing:border-box;" /></td>
+                    </tr>
+                    <tr>
+                        <th>Hora Máxima Chegada:</th>
+                        <td><input type="text" id="planner_max_time" value="08:30:00" style="width:100%; box-sizing:border-box;" /></td>
+                    </tr>
+                    <tr>
+                        <th>Alvos (X|Y):</th>
                         <td>
                             <textarea id="planner_targets" placeholder="111|111 222|222 333|333 ..." style="width:100%; height:60px; box-sizing:border-box; font-family:monospace;"></textarea>
                             <small style="color:#666;">Cola as coordenadas dos alvos separadas por espaços ou linhas.</small>
                         </td>
-                    </tr>
-                    <tr>
-                        <th>Data Mínima Envio:</th>
-                        <td><input type="text" id="planner_min_date" value="${minDateStr}" style="width:100%; box-sizing:border-box;" /></td>
-                    </tr>
-                    <tr>
-                        <th>Hora Mínima Envio:</th>
-                        <td><input type="text" id="planner_min_time" value="${minTimeStr}" style="width:100%; box-sizing:border-box;" /></td>
-                    </tr>
-                    <tr>
-                        <th>Data Chegada:</th>
-                        <td><input type="text" id="planner_date" value="${arrDateStr}" style="width:100%; box-sizing:border-box;" /></td>
-                    </tr>
-                    <tr>
-                        <th>Hora Chegada:</th>
-                        <td><input type="text" id="planner_time" value="${arrTimeStr}" style="width:100%; box-sizing:border-box;" /></td>
                     </tr>
                 </table>
                 <div style="text-align:center; margin-bottom:10px;">
@@ -146,39 +149,47 @@ javascript:
                 return;
             }
 
-            var minDParts = $('#planner_min_date').val().split('.');
+            var dParts = $('#planner_arr_date').val().split('.');
             var minTParts = $('#planner_min_time').val().split(':');
-            if (minDParts.length < 3 || minTParts.length < 3) {
-                UI.ErrorMessage('Formato de Data/Hora Mínima de Envio inválido!');
+            var maxTParts = $('#planner_max_time').val().split(':');
+
+            if (dParts.length < 3 || minTParts.length < 3 || maxTParts.length < 3) {
+                UI.ErrorMessage('Formato de Data (DD.MM.YYYY) ou Horas (HH:MM:SS) inválido!');
                 return;
             }
-            var minLaunchTime = new Date(minDParts[2], minDParts[1] - 1, minDParts[0], minTParts[0], minTParts[1], minTParts[2]);
 
-            var dParts = $('#planner_date').val().split('.');
-            var tParts = $('#planner_time').val().split(':');
-            if (dParts.length < 3 || tParts.length < 3) {
-                UI.ErrorMessage('Formato de Data ou Hora de Chegada inválido!');
+            var minArrival = new Date(dParts[2], dParts[1] - 1, dParts[0], minTParts[0], minTParts[1], minTParts[2]);
+            var maxArrival = new Date(dParts[2], dParts[1] - 1, dParts[0], maxTParts[0], maxTParts[1], maxTParts[2]);
+
+            if (minArrival > maxArrival) {
+                UI.ErrorMessage('A Hora Mínima não pode ser superior à Hora Máxima!');
                 return;
             }
-            var arrivalTime = new Date(dParts[2], dParts[1] - 1, dParts[0], tParts[0], tParts[1], tParts[2]);
-            var arrivalISOStr = dParts[2] + "-" + self.pad(dParts[1]) + "-" + self.pad(dParts[0]) + " " + 
-                                self.pad(tParts[0]) + ":" + self.pad(tParts[1]) + ":" + self.pad(tParts[2]);
 
-            var allPossiblePairs = [];
+            var serverNow = self.getServerDateTime();
+
+            // Gera pares válidos onde o lançamento pode ser feito a partir de agora
+            var validPairs = [];
             $.each(self.villages, function(vIdx, v) {
                 $.each(uniqueTargets, function(tIdx, target) {
-                    var lTime = self.getLaunchTime(v.coords, target, arrivalTime);
-                    if (lTime >= minLaunchTime) {
-                        allPossiblePairs.push({
+                    var travelSecs = self.getTravelTimeSeconds(v.coords, target);
+                    var minLaunch = new Date(minArrival.getTime() - (travelSecs * 1000));
+                    var maxLaunch = new Date(maxArrival.getTime() - (travelSecs * 1000));
+
+                    // Elegível se o momento atual estiver antes da data/hora máxima de envio
+                    if (serverNow <= maxLaunch) {
+                        validPairs.push({
                             origin: v,
                             target: target,
-                            launchTime: lTime
+                            minLaunch: minLaunch,
+                            maxLaunch: maxLaunch
                         });
                     }
                 });
             });
 
-            allPossiblePairs.sort(function(a, b) { return a.launchTime - b.launchTime; });
+            // Ordena pelo momento mais urgente de envio (maxLaunch mais próximo)
+            validPairs.sort(function(a, b) { return a.maxLaunch - b.maxLaunch; });
 
             var originCounts = {};
             var assignedTargets = {};
@@ -186,8 +197,8 @@ javascript:
 
             $.each(self.villages, function(i, v) { originCounts[v.id] = 0; });
 
-            for (var i = 0; i < allPossiblePairs.length; i++) {
-                var pair = allPossiblePairs[i];
+            for (var i = 0; i < validPairs.length; i++) {
+                var pair = validPairs[i];
                 var vId = pair.origin.id;
                 var target = pair.target;
 
@@ -198,10 +209,7 @@ javascript:
                 }
             }
 
-            assignedPlans.sort(function(a, b) { return a.launchTime - b.launchTime; });
-            self.currentResults = assignedPlans;
-
-            var bbExport = `Plano de Fakes (chegada a ${arrivalISOStr})\n\n`;
+            var bbExport = `Plano de Fakes (chegada entre ${$('#planner_min_time').val()} e ${$('#planner_max_time').val()} a ${$('#planner_arr_date').val()})\n\n`;
 
             var outHtml = `
             <div style="background:#e0d0b0; padding:6px 10px; font-weight:bold; border-radius:3px; margin-bottom:8px; border:1px solid #804000;">
@@ -210,28 +218,15 @@ javascript:
             <table class="vis" style="width:100%; font-size:12px;">
                 <thead>
                     <tr>
-                        <th style="width:30px; text-align:center;">Feito</th>
+                        <th style="width:35px; text-align:center;">Feito</th>
+                        <th style="width:50px; text-align:center;">Ação</th>
                         <th>Origem</th>
                         <th>Alvo</th>
-                        <th>Hora de Saída</th>
-                        <th>Ação</th>
                     </tr>
                 </thead>
                 <tbody>`;
 
             $.each(assignedPlans, function(i, r) {
-                var dateFormatted = r.launchTime.getFullYear() + "-" + 
-                                    self.pad(r.launchTime.getMonth()+1) + "-" + 
-                                    self.pad(r.launchTime.getDate());
-                                    
-                var timeFormatted = self.pad(r.launchTime.getHours()) + ":" + 
-                                    self.pad(r.launchTime.getMinutes()) + ":" + 
-                                    self.pad(r.launchTime.getSeconds());
-
-                var displayLaunchStr = self.pad(r.launchTime.getDate()) + "." + 
-                                       self.pad(r.launchTime.getMonth()+1) + " " + 
-                                       timeFormatted;
-
                 var tCoords = r.target.split('|');
                 var placeUrl = `/game.php?village=${r.origin.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
                 if (game_data.player.sitter != "0") {
@@ -242,13 +237,14 @@ javascript:
                     <td style="text-align:center;">
                         <input type="checkbox" class="fake_sent_check" data-target="${r.target}" />
                     </td>
+                    <td style="text-align:center;">
+                        <a href="${placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a>
+                    </td>
                     <td><b>${r.origin.name}</b></td>
                     <td><b>${r.target}</b></td>
-                    <td><b>${displayLaunchStr}</b></td>
-                    <td><a href="${placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a></td>
                 </tr>`;
 
-                bbExport += `Lançar ${self.unitName} [b]fake[/b] da [village]${r.origin.coords}[/village] contra a aldeia [village]${r.target}[/village] a [i]${dateFormatted}[/i] [b]${timeFormatted}[/b]\n`;
+                bbExport += `Lançar ${self.unitName} [b]fake[/b] da [village]${r.origin.coords}[/village] contra a aldeia [village]${r.target}[/village]\n`;
             });
 
             outHtml += `</tbody></table>`;
@@ -288,7 +284,7 @@ javascript:
             });
         },
 
-        getLaunchTime: function(originCoordsStr, targetCoordsStr, arrivalTime) {
+        getTravelTimeSeconds: function(originCoordsStr, targetCoordsStr) {
             var oCoords = originCoordsStr.split('|');
             var tCoords = targetCoordsStr.split('|');
             
@@ -296,8 +292,7 @@ javascript:
             var dy = Math.abs(parseInt(tCoords[1]) - parseInt(oCoords[1]));
             var dist = Math.sqrt(dx * dx + dy * dy);
 
-            var travelTimeSeconds = Math.round(dist * this.ramSpeedInSeconds);
-            return new Date(arrivalTime.getTime() - (travelTimeSeconds * 1000));
+            return Math.round(dist * this.ramSpeedInSeconds);
         },
 
         pad: function(n) { return n < 10 ? '0' + parseInt(n, 10) : n; }
