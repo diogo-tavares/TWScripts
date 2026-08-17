@@ -1,10 +1,11 @@
 javascript:
 (function(){
-    if ($('#tw_group_planner').length) {
-        $('#tw_group_planner').remove();
+    if ($('#tw_fake_planner').length) {
+        $('#tw_fake_planner').remove();
         return;
     }
 
+    // 1.º Clique: Redirecionamento para Visão Geral (Tropas)
     if (window.location.href.indexOf('screen=overview_villages') === -1 || window.location.href.indexOf('mode=units') === -1) {
         UI.InfoMessage('A redirecionar para a Visão Geral (Tropas)...', 1500);
         var targetUrl = '/game.php?village=' + game_data.village.id + '&screen=overview_villages&mode=units';
@@ -15,34 +16,15 @@ javascript:
         return;
     }
 
-    var groupPlanner = {
-        speedsInSeconds: {
-            spear: 1095.346,
-            sword: 1338.756,
-            axe: 1095.346,
-            archer: 1095.346,
-            spy: 547.673,
-            light: 608.525,
-            marcher: 608.525,
-            heavy: 669.378,
-            ram: 1764.724,
-            catapult: 1764.724,
-            knight: 608.525,
-            snob: 2068.986
-        },
-        unitNames: {
-            spear: "Lanceiro", sword: "Espadachim", axe: "Viking",
-            archer: "Arqueiro", spy: "Batedor", light: "Cavalaria Leve",
-            marcher: "Arqueiro a Cavalo", heavy: "Cavalaria Pesada", ram: "Ariete",
-            catapult: "Catapulta", knight: "Paladino", snob: "Nobre"
-        },
-        activeUnits: ['spear','sword','axe','spy','light','heavy','ram','catapult','snob','knight'],
+    var fakePlanner = {
+        ramSpeedInSeconds: 1764.724,
+        unitName: "Ariete",
         villages: [],
         currentGroupName: "Todos",
 
         init: function() {
             var self = this;
-            UI.InfoMessage('A ler aldeias do grupo...', 1000);
+            UI.InfoMessage('A iniciar Planeador de Fakes...', 1000);
             self.detectCurrentGroup();
             self.readCurrentPageVillages();
             self.buildUI();
@@ -86,204 +68,223 @@ javascript:
             });
         },
 
+        getServerDateTime: function() {
+            var serverDateStr = $('#serverDate').text().trim();
+            var serverTimeStr = $('#serverTime').text().trim();
+            
+            if (serverDateStr && serverTimeStr) {
+                var dParts = serverDateStr.split('/');
+                var tParts = serverTimeStr.split(':');
+                return new Date(dParts[2], dParts[1] - 1, dParts[0], tParts[0], tParts[1], tParts[2]);
+            }
+            return new Date();
+        },
+
         buildUI: function() {
             var self = this;
-            var targetCoords = game_data.village.x + '|' + game_data.village.y;
-            
-            var now = new Date();
-            var dateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
-            var timeStr = self.pad(now.getHours()) + ":" + self.pad(now.getMinutes()) + ":" + self.pad(now.getSeconds());
+            var now = self.getServerDateTime();
+            var arrDateStr = self.pad(now.getDate()) + "." + self.pad(now.getMonth()+1) + "." + now.getFullYear();
 
             var html = `
-            <div id="tw_group_planner" style="width:100%; box-sizing:border-box; padding:5px;">
+            <div id="tw_fake_planner" style="width:100%; box-sizing:border-box; padding:5px;">
                 <div style="background:#804000; color:#fff; padding:6px 10px; font-weight:bold; border-radius:3px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-                    <span>📁 Grupo Ativo: <u style="color:#ffdc73;">${self.currentGroupName}</u></span>
-                    <small>(${self.villages.length} aldeias)</small>
+                    <span>🎭 Planeador de Fakes | Grupo: <u style="color:#ffdc73;">${self.currentGroupName}</u></span>
+                    <small>(${self.villages.length} aldeias | até ${self.villages.length * 5} fakes)</small>
                 </div>
                 <table class="vis" style="width:100%; margin-bottom:10px;">
                     <tr>
-                        <th style="width:25%;">Alvo (X|Y):</th>
-                        <td><input type="text" id="planner_target" value="${targetCoords}" style="width:100%; box-sizing:border-box;" /></td>
+                        <th style="width:30%;">Dia de Chegada:</th>
+                        <td><input type="text" id="planner_arr_date" value="${arrDateStr}" style="width:100%; box-sizing:border-box;" /></td>
                     </tr>
                     <tr>
-                        <th>Data Chegada:</th>
-                        <td><input type="text" id="planner_date" value="${dateStr}" style="width:100%; box-sizing:border-box;" /></td>
+                        <th>Hora Mínima Chegada:</th>
+                        <td><input type="text" id="planner_min_time" value="08:00:00" style="width:100%; box-sizing:border-box;" /></td>
                     </tr>
                     <tr>
-                        <th>Hora Chegada:</th>
-                        <td><input type="text" id="planner_time" value="${timeStr}" style="width:100%; box-sizing:border-box;" /></td>
+                        <th>Hora Máxima Chegada:</th>
+                        <td><input type="text" id="planner_max_time" value="23:00:00" style="width:100%; box-sizing:border-box;" /></td>
+                    </tr>
+                    <tr>
+                        <th>Alvos (X|Y):</th>
+                        <td>
+                            <textarea id="planner_targets" placeholder="111|111 222|222 333|333 ..." style="width:100%; height:60px; box-sizing:border-box; font-family:monospace;"></textarea>
+                            <small style="color:#666;">Cola as coordenadas dos alvos separadas por espaços ou linhas.</small>
+                        </td>
                     </tr>
                 </table>
                 <div style="text-align:center; margin-bottom:10px;">
-                    <button class="btn btn-confirm-yes" id="btn_calculate_plan" style="width:100%; padding:8px; font-weight:bold; font-size:14px;">Calcular Horários</button>
+                    <button class="btn btn-confirm-yes" id="btn_calculate_fakes" style="width:100%; padding:8px; font-weight:bold; font-size:14px;">Gerar Plano de Fakes</button>
                 </div>
                 <div id="planner_results" style="overflow-x:auto;"></div>
             </div>`;
 
-            Dialog.show("tw_group_planner_dialog", html);
+            Dialog.show("tw_fake_planner_dialog", html);
             
             var calcWidth = Math.min(900, $(window).width() - 20);
-            $('#tw_group_planner_dialog').css({
+            $('#tw_fake_planner_dialog').css({
                 'width': calcWidth + 'px',
                 'max-width': '95vw'
             });
 
-            self.renderVillageList();
-
-            $('#btn_calculate_plan').click(function(){ self.calculate(); });
+            $('#btn_calculate_fakes').click(function(){ self.calculateFakes(); });
         },
 
-        renderVillageList: function() {
+        calculateFakes: function() {
             var self = this;
-            if(!self.villages.length) {
-                $('#planner_results').html('<p style="color:red; text-align:center; font-weight:bold; padding:10px;">Nenhuma aldeia encontrada neste grupo!</p>');
+            var rawTargets = $('#planner_targets').val();
+            var targetMatches = rawTargets.match(/\d{3}\|\d{3}/g);
+
+            if (!targetMatches || targetMatches.length === 0) {
+                UI.ErrorMessage('Insere pelo menos uma coordenada de alvo válida.');
                 return;
             }
 
-            var unitOptions = '';
-            $.each(self.activeUnits, function(i, u) {
-                unitOptions += `<option value="${u}">${self.unitNames[u]}</option>`;
+            var uniqueTargets = [];
+            $.each(targetMatches, function(i, el){
+                if($.inArray(el, uniqueTargets) === -1) uniqueTargets.push(el);
             });
 
-            var html = `
-            <div style="margin-bottom:8px; background:#e0d0b0; padding:8px; border-radius:3px; border:1px solid #804000;">
-                <label><b>Mudar TODAS as aldeias (${self.villages.length}) para:</b></label>
-                <select id="planner_global_unit" style="width:100%; margin-top:4px; padding:4px;">
-                    <option value="">-- Escolher tropa para todas --</option>
-                    ${unitOptions}
-                </select>
+            if (!self.villages.length) {
+                UI.ErrorMessage('Nenhuma aldeia encontrada neste grupo!');
+                return;
+            }
+
+            var dParts = $('#planner_arr_date').val().split('.');
+            var minTParts = $('#planner_min_time').val().split(':');
+            var maxTParts = $('#planner_max_time').val().split(':');
+
+            if (dParts.length < 3 || minTParts.length < 3 || maxTParts.length < 3) {
+                UI.ErrorMessage('Formato de Data (DD.MM.YYYY) ou Horas (HH:MM:SS) inválido!');
+                return;
+            }
+
+            var minArrival = new Date(dParts[2], dParts[1] - 1, dParts[0], minTParts[0], minTParts[1], minTParts[2]);
+            var maxArrival = new Date(dParts[2], dParts[1] - 1, dParts[0], maxTParts[0], maxTParts[1], maxTParts[2]);
+
+            if (minArrival > maxArrival) {
+                UI.ErrorMessage('A Hora Mínima não pode ser superior à Hora Máxima!');
+                return;
+            }
+
+            var serverNow = self.getServerDateTime();
+
+            var validPairs = [];
+            $.each(self.villages, function(vIdx, v) {
+                $.each(uniqueTargets, function(tIdx, target) {
+                    var travelSecs = self.getTravelTimeSeconds(v.coords, target);
+                    var minLaunch = new Date(minArrival.getTime() - (travelSecs * 1000));
+                    var maxLaunch = new Date(maxArrival.getTime() - (travelSecs * 1000));
+
+                    if (serverNow >= minLaunch && serverNow <= maxLaunch) {
+                        validPairs.push({
+                            origin: v,
+                            target: target,
+                            minLaunch: minLaunch,
+                            maxLaunch: maxLaunch
+                        });
+                    }
+                });
+            });
+
+            validPairs.sort(function(a, b) { return a.maxLaunch - b.maxLaunch; });
+
+            var originCounts = {};
+            var assignedTargets = {};
+            var assignedPlans = [];
+
+            $.each(self.villages, function(i, v) { originCounts[v.id] = 0; });
+
+            for (var i = 0; i < validPairs.length; i++) {
+                var pair = validPairs[i];
+                var vId = pair.origin.id;
+                var target = pair.target;
+
+                if (!assignedTargets[target] && originCounts[vId] < 5) {
+                    assignedPlans.push(pair);
+                    assignedTargets[target] = true;
+                    originCounts[vId]++;
+                }
+            }
+
+            var outHtml = `
+            <div style="background:#e0d0b0; padding:6px 10px; font-weight:bold; border-radius:3px; margin-bottom:8px; border:1px solid #804000;">
+                📊 Fakes válidos para envio agora: ${assignedPlans.length} / ${uniqueTargets.length} alvos
             </div>
             <table class="vis" style="width:100%; font-size:12px;">
                 <thead>
                     <tr>
-                        <th>Aldeia Origem</th>
-                        <th>Coordenadas</th>
-                        <th>Tropa Base</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-
-            $.each(self.villages, function(i, v) {
-                html += `<tr>
-                    <td><b>${v.name}</b></td>
-                    <td>${v.coords}</td>
-                    <td>
-                        <select class="planner_village_unit" data-index="${i}" style="width:100%;">
-                            <option value="ram" selected>Ariete / Catapulta</option>
-                            ${unitOptions}
-                        </select>
-                    </td>
-                </tr>`;
-            });
-
-            html += `</tbody></table>`;
-            $('#planner_results').html(html);
-
-            $('#planner_global_unit').change(function(){
-                var selectedUnit = $(this).val();
-                if(selectedUnit) {
-                    $('.planner_village_unit').val(selectedUnit);
-                }
-            });
-        },
-
-        calculate: function() {
-            var self = this;
-            var targetMatch = $('#planner_target').val().match(/\d{3}\|\d{3}/);
-            if(!targetMatch) { UI.ErrorMessage('Insere coordenadas válidas (ex: 555|555)'); return; }
-            var targetCoordsStr = targetMatch[0];
-            var tCoords = targetCoordsStr.split('|');
-
-            var dParts = $('#planner_date').val().split('.');
-            var tParts = $('#planner_time').val().split(':');
-            if(dParts.length < 3 || tParts.length < 3) { UI.ErrorMessage('Formato de Data/Hora inválido!'); return; }
-
-            var arrivalTime = new Date(dParts[2], dParts[1] - 1, dParts[0], tParts[0], tParts[1], tParts[2]);
-            var arrivalISOStr = dParts[2] + "-" + self.pad(dParts[1]) + "-" + self.pad(dParts[0]) + " " + 
-                                self.pad(tParts[0]) + ":" + self.pad(tParts[1]) + ":" + self.pad(tParts[2]);
-
-            var results = [];
-            var bbExport = `Plano de ataque contra a aldeia [village]${targetCoordsStr}[/village] (chegada a ${arrivalISOStr})\n\n`;
-
-            $('.planner_village_unit').each(function(i) {
-                var v = self.villages[i];
-                var unit = $(this).val();
-                
-                var vCoords = v.coords.split('|');
-                var dx = Math.abs(parseInt(tCoords[0]) - parseInt(vCoords[0]));
-                var dy = Math.abs(parseInt(tCoords[1]) - parseInt(vCoords[1]));
-                var dist = Math.sqrt(dx * dx + dy * dy);
-
-                var travelTimeSeconds = Math.round(dist * self.speedsInSeconds[unit]);
-                var launchTime = new Date(arrivalTime.getTime() - (travelTimeSeconds * 1000));
-
-                var dateFormatted = launchTime.getFullYear() + "-" + 
-                                    self.pad(launchTime.getMonth()+1) + "-" + 
-                                    self.pad(launchTime.getDate());
-                                    
-                var timeFormatted = self.pad(launchTime.getHours()) + ":" + 
-                                    self.pad(launchTime.getMinutes()) + ":" + 
-                                    self.pad(launchTime.getSeconds());
-
-                var displayLaunchStr = self.pad(launchTime.getDate()) + "." + 
-                                       self.pad(launchTime.getMonth()+1) + " " + 
-                                       timeFormatted;
-
-                var placeUrl = `/game.php?village=${v.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
-                if (game_data.player.sitter != "0") {
-                    placeUrl = `/game.php?t=${game_data.player.id}&village=${v.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
-                }
-
-                results.push({
-                    name: v.name,
-                    coords: v.coords,
-                    unit: self.unitNames[unit],
-                    launchTime: launchTime,
-                    launchStr: displayLaunchStr,
-                    dateFormatted: dateFormatted,
-                    timeFormatted: timeFormatted,
-                    placeUrl: placeUrl
-                });
-            });
-
-            results.sort(function(a, b) { return a.launchTime - b.launchTime; });
-
-            var outHtml = `<h4 style="margin-top:15px; color:#804000;">📅 Horários de Saída Ordenados</h4>
-            <table class="vis" style="width:100%; font-size:12px;">
-                <thead>
-                    <tr>
+                        <th style="width:35px; text-align:center;">Feito</th>
+                        <th style="width:50px; text-align:center;">Ação</th>
                         <th>Origem</th>
-                        <th>Tropa</th>
-                        <th>Hora de Saída</th>
-                        <th>Ação</th>
+                        <th>Alvo</th>
                     </tr>
                 </thead>
                 <tbody>`;
 
-            $.each(results, function(i, r) {
-                outHtml += `<tr>
-                    <td><b>${r.name}</b></td>
-                    <td>${r.unit}</td>
-                    <td><b>${r.launchStr}</b></td>
-                    <td><a href="${r.placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a></td>
-                </tr>`;
+            $.each(assignedPlans, function(i, r) {
+                var tCoords = r.target.split('|');
+                var placeUrl = `/game.php?village=${r.origin.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
+                if (game_data.player.sitter != "0") {
+                    placeUrl = `/game.php?t=${game_data.player.id}&village=${r.origin.id}&screen=place&x=${tCoords[0]}&y=${tCoords[1]}`;
+                }
 
-                // Novo formato de exportação sem hiperligação e com aldeia alvo
-                bbExport += `Lançar ${r.unit} da [village]${r.coords}[/village] contra a aldeia [village]${targetCoordsStr}[/village] a [i]${r.dateFormatted}[/i] [b]${r.timeFormatted}[/b]\n`;
+                outHtml += `<tr>
+                    <td style="text-align:center;">
+                        <input type="checkbox" class="fake_sent_check" data-target="${r.target}" />
+                    </td>
+                    <td style="text-align:center;">
+                        <a href="${placeUrl}" target="_blank" class="btn" style="padding:2px 6px;">Atacar</a>
+                    </td>
+                    <td><b>${r.origin.name}</b></td>
+                    <td><b>${r.target}</b></td>
+                </tr>`;
             });
 
             outHtml += `</tbody></table>`;
-            
-            outHtml += `<div style="margin-top:15px;">
-                <b>Exportar Plano (BBCode):</b>
-                <textarea style="width:100%; height:120px; box-sizing:border-box; font-size:11px;" onclick="this.select()">${bbExport}</textarea>
+
+            outHtml += `
+            <div style="margin-top:15px; text-align:center;">
+                <button class="btn btn-default" id="btn_remaining_villages" style="width:100%; padding:6px; font-weight:bold;">Lista de aldeias restantes</button>
+            </div>
+            <div id="remaining_container" style="display:none; margin-top:8px;">
+                <b>Coordenadas dos Alvos Pendentes:</b>
+                <textarea id="remaining_targets_box" style="width:100%; height:70px; box-sizing:border-box; font-family:monospace; font-size:11px;" onclick="this.select()"></textarea>
             </div>`;
 
             $('#planner_results').html(outHtml);
+
+            $('#btn_remaining_villages').click(function(){
+                var sentTargets = [];
+                $('.fake_sent_check:checked').each(function(){
+                    sentTargets.push($(this).attr('data-target'));
+                });
+
+                var remaining = [];
+                $.each(uniqueTargets, function(idx, t){
+                    if ($.inArray(t, sentTargets) === -1) {
+                        remaining.push(t);
+                    }
+                });
+
+                $('#remaining_targets_box').val(remaining.join(' '));
+                $('#remaining_container').show();
+                UI.InfoMessage('Lista atualizada: ' + remaining.length + ' alvos restantes.', 1500);
+            });
+        },
+
+        getTravelTimeSeconds: function(originCoordsStr, targetCoordsStr) {
+            var oCoords = originCoordsStr.split('|');
+            var tCoords = targetCoordsStr.split('|');
+            
+            var dx = Math.abs(parseInt(tCoords[0]) - parseInt(oCoords[0]));
+            var dy = Math.abs(parseInt(tCoords[1]) - parseInt(oCoords[1]));
+            var dist = Math.sqrt(dx * dx + dy * dy);
+
+            return Math.round(dist * this.ramSpeedInSeconds);
         },
 
         pad: function(n) { return n < 10 ? '0' + parseInt(n, 10) : n; }
     };
 
-    groupPlanner.init();
+    fakePlanner.init();
 })();
