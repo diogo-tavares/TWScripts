@@ -168,7 +168,7 @@ javascript:
 
             var serverNow = self.getServerDateTime();
 
-            // Gera pares válidos onde o lançamento pode ser feito a partir de agora
+            // Filtra pares onde o lançamento feito AGORA chega estritamente entre a hora mínima e máxima
             var validPairs = [];
             $.each(self.villages, function(vIdx, v) {
                 $.each(uniqueTargets, function(tIdx, target) {
@@ -176,8 +176,9 @@ javascript:
                     var minLaunch = new Date(minArrival.getTime() - (travelSecs * 1000));
                     var maxLaunch = new Date(maxArrival.getTime() - (travelSecs * 1000));
 
-                    // Elegível se o momento atual estiver antes da data/hora máxima de envio
-                    if (serverNow <= maxLaunch) {
+                    // serverNow >= minLaunch garante que não chega ANTES da hora mínima
+                    // serverNow <= maxLaunch garante que não chega DEPOIS da hora máxima
+                    if (serverNow >= minLaunch && serverNow <= maxLaunch) {
                         validPairs.push({
                             origin: v,
                             target: target,
@@ -188,7 +189,6 @@ javascript:
                 });
             });
 
-            // Ordena pelo momento mais urgente de envio (maxLaunch mais próximo)
             validPairs.sort(function(a, b) { return a.maxLaunch - b.maxLaunch; });
 
             var originCounts = {};
@@ -213,7 +213,7 @@ javascript:
 
             var outHtml = `
             <div style="background:#e0d0b0; padding:6px 10px; font-weight:bold; border-radius:3px; margin-bottom:8px; border:1px solid #804000;">
-                📊 Fakes atribuídos: ${assignedPlans.length} / ${uniqueTargets.length} alvos
+                📊 Fakes válidos para envio agora: ${assignedPlans.length} / ${uniqueTargets.length} alvos
             </div>
             <table class="vis" style="width:100%; font-size:12px;">
                 <thead>
