@@ -93,8 +93,8 @@
         var outputSummary = { 
             'Full Atack': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 19400 }], descID: 3 }, // limite alterado p farmar pontos
             'Semi Atack': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 15000, maxpop: 19399 }], descID: 4 }, // limite max alterado
-            'Half Atack': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 10000, maxpop: 15000 }], descID: 5 }, 
-            'Quarter Atack': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 5000, maxpop: 10000 }], descID: 6 }, 
+            'Half Atack': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 10000, maxpop: 14999 }], descID: 5 }, 
+            'Quarter Atack': { group: 'Offensive', criteria: [{ unit: 'offense', minpop: 5000, maxpop: 9999 }], descID: 6 }, 
             'Full Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 19400 }], descID: 8 }, 
             'Semi Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 15000, maxpop: 19399 }], descID: 9 }, // limite alterado p farmar pontos
             'Half Defense': { group: 'Defensive', criteria: [{ unit: 'defense', minpop: 10000, maxpop: 14999 }], descID: 10 }, // limite max alterado
