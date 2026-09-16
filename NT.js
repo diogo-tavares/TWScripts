@@ -70,7 +70,7 @@ javascript:(function() {
     ${cssSophie}
     <div id="sophieNTModal">
         <div class="sophHeader">
-            <span>⚔️ NT Resource Balancer (v7 - Send & Filter Fix)</span>
+            <span>⚔️ NT Resource Balancer (v8 - Snob Overview Sync)</span>
             <span onclick="$('#sophieNTModal').remove();" style="cursor:pointer;font-size:16px;">✖</span>
         </div>
         <div id="ntBody" style="padding: 12px;">
@@ -88,7 +88,7 @@ javascript:(function() {
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A calcular défices e alocar mercadores...</b></p>
+                <p style="font-size:13px;"><b>A calcular défices com base em Nobres reais e transportes...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
@@ -153,49 +153,36 @@ javascript:(function() {
         $("#ntConfigStep").hide();
         $("#ntLoadingStep").show();
 
-        // 1. Obter Nobres via overview de unidades
-        $("#ntLoadingStatus").text("A ler nobres existentes e a caminho...");
+        // 1. Obter Nobres reais via mode=snob (Aba especializada de nobres)
+        $("#ntLoadingStatus").text("A ler nobres via vista de nobres...");
         let nobleCountMap = {};
         try {
-            let unitsHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=units`);
-            let docUnits = $(unitsHtml);
-            let uTable = docUnits.find("#units_table");
+            let snobHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=snob`);
+            let docSnob = $(snobHtml);
 
-            let snobColIndex = -1;
-            uTable.find("thead th, tr:first th").each(function(idx) {
-                if ($(this).find("img[src*='unit_snob']").length) {
-                    snobColIndex = idx;
-                    return false;
+            docSnob.find("table.vis tr").each(function() {
+                let r = $(this);
+                let link = r.find(".quickedit-vn");
+                if (link.length) {
+                    let m = link.text().match(/(\d{3}\|\d{3})/);
+                    if (m) {
+                        let coord = m[1];
+                        // Colunas padrão no mode=snob: [0] aldeia, [1] existente, [2] em treino, [3] a viajar
+                        let tds = r.find("td");
+                        let existente = parseInt(tds.eq(1).text().trim()) || 0;
+                        let treino = parseInt(tds.eq(2).text().trim()) || 0;
+                        let viagem = parseInt(tds.eq(3).text().trim()) || 0;
+                        nobleCountMap[coord] = existente + treino + viagem;
+                    }
                 }
             });
-
-            if (snobColIndex !== -1) {
-                uTable.find("tbody tr, tr").each(function() {
-                    let r = $(this);
-                    let link = r.find(".quickedit-vn");
-                    if (link.length) {
-                        let m = link.text().match(/(\d{3}\|\d{3})/);
-                        if (m) {
-                            let coord = m[1];
-                            let totalRow = r.nextUntil("tr:has(.quickedit-vn)").filter(":contains('total')");
-                            let snobQty = 0;
-                            if (totalRow.length) {
-                                snobQty = parseInt(totalRow.find("td").eq(snobColIndex).text().trim()) || 0;
-                            } else {
-                                snobQty = parseInt(r.find("td").eq(snobColIndex).text().trim()) || 0;
-                            }
-                            nobleCountMap[coord] = snobQty;
-                        }
-                    }
-                });
-            }
-            logDebug(`Nobres mapeados via units: ${JSON.stringify(nobleCountMap)}`);
+            logDebug(`Nobres mapeados via mode=snob: ${JSON.stringify(nobleCountMap)}`);
         } catch(e) {
-            logDebug("Aviso: Falha ao carregar vista de unidades.");
+            logDebug("Aviso: Falha ao carregar vista de nobres.");
         }
 
         // 2. Transportes a caminho via mode=trader
-        $("#ntLoadingStatus").text("A somar recursos a caminho no mercado...");
+        $("#ntLoadingStatus").text("A somar transportes a caminho...");
         let incomingRes = {};
         try {
             let traderHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=trader`);
@@ -218,13 +205,13 @@ javascript:(function() {
                     incomingRes[destCoord].i += i;
                 }
             });
-            logDebug("Transportes a caminho mapeados.");
+            logDebug("Transportes em trânsito contabilizados.");
         } catch(e) {
             logDebug("Aviso: Falha ao carregar transportes.");
         }
 
-        // 3. Obter Aldeias via mode=prod
-        $("#ntLoadingStatus").text("A ler recursos e mercadores do grupo...");
+        // 3. Obter Aldeias do grupo via mode=prod
+        $("#ntLoadingStatus").text("A carregar dadoras e recursos...");
         let groupVillages = [];
         let allVillagesMap = {};
 
@@ -257,25 +244,31 @@ javascript:(function() {
                     let vData = { id: villageId, coord: coord, x: x, y: y, w: w, c: c, i: i, merc: merc };
                     allVillagesMap[coord] = vData;
 
-                    // REGRA DE OURO: Se a aldeia for um dos alvos de NT, NÃO entra como dadora
                     if (!uniqueTargets.includes(coord)) {
                         groupVillages.push(vData);
                     }
                 }
             });
-            logDebug(`Dadoras elegíveis (excluindo alvos): ${groupVillages.length}`);
+            logDebug(`Dadoras carregadas (sem alvos): ${groupVillages.length}`);
         } catch(e) {
-            logDebug(`Erro ao ler dadoras: ${e}`);
+            logDebug(`Erro ao ler produção: ${e}`);
         }
 
-        // 4. Fallback para alvos fora do grupo ativo (garantir ID e recursos)
+        // 4. Mapeamento preciso de ID e recursos para aldeias fora do grupo
         for (let coord of uniqueTargets) {
-            if (!allVillagesMap[coord] || !allVillagesMap[coord].id || nobleCountMap[coord] === undefined) {
+            if (!allVillagesMap[coord] || !allVillagesMap[coord].id) {
                 try {
-                    let vInfoHtml = await $.get(`/game.php?screen=info_village&coord=${coord}`);
+                    let [tx, ty] = coord.split("|").map(Number);
+                    let vInfoHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=info_village&x=${tx}&y=${ty}`);
                     let docV = $(vInfoHtml);
-                    let vLink = docV.find("a[href*='screen=overview']").first().attr("href");
-                    let vid = vLink ? vLink.match(/village=(\d+)/)[1] : null;
+                    
+                    // ID real da aldeia consultada no ecrã de info
+                    let vid = null;
+                    let mLink = docV.find("a[href*='screen=overview&village=']").attr("href") || docV.find("a[href*='target=']").attr("href");
+                    if (mLink) {
+                        let m = mLink.match(/(?:village|target)=(\d+)/);
+                        if (m) vid = m[1];
+                    }
 
                     if (vid) {
                         let ovHtml = await $.get(`/game.php?village=${vid}&screen=overview`);
@@ -283,17 +276,12 @@ javascript:(function() {
                         let w = parseInt(docOv.find("#wood").text().replace(/\./g, '')) || 0;
                         let c = parseInt(docOv.find("#stone").text().replace(/\./g, '')) || 0;
                         let i = parseInt(docOv.find("#iron").text().replace(/\./g, '')) || 0;
-                        let [x, y] = coord.split("|").map(Number);
-                        
-                        allVillagesMap[coord] = { id: vid, coord: coord, x: x, y: y, w: w, c: c, i: i, merc: 0 };
 
-                        if (nobleCountMap[coord] === undefined) {
-                            let snobTxt = docOv.find("strong:contains('Nobre'), a[href*='unit=snob']").parent().text();
-                            let sMatch = snobTxt.match(/(\d+)/);
-                            nobleCountMap[coord] = sMatch ? parseInt(sMatch[1]) : 0;
-                        }
+                        allVillagesMap[coord] = { id: vid, coord: coord, x: tx, y: ty, w: w, c: c, i: i, merc: 0 };
                     }
-                } catch(e) {}
+                } catch(e) {
+                    logDebug(`Aviso: Falha ao obter dados externos de ${coord}`);
+                }
             }
         }
 
@@ -315,7 +303,7 @@ javascript:(function() {
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
 
-            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres:[${currentNobles}/${targetNobles}] | Req: ${defW}W ${defC}C ${defI}I`);
+            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres: [${currentNobles}/${targetNobles}] | Défice: ${defW}W ${defC}C ${defI}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
@@ -420,33 +408,45 @@ javascript:(function() {
                 btn.prop("disabled", true).text("A enviar...");
 
                 let postData = {
-                    target_id: btn.data("tid"),
+                    target_id: btn.data("tid") || "",
                     x: btn.data("tx"),
                     y: btn.data("ty"),
                     wood: btn.data("w"),
                     stone: btn.data("c"),
-                    iron: btn.data("i"),
-                    h: game_data.csrf
+                    iron: btn.data("i")
                 };
 
-                let sendUrl = `/game.php?village=${btn.data("src")}&screen=market&mode=send&action=send`;
-
-                $.ajax({
-                    url: sendUrl,
-                    type: 'POST',
-                    data: postData,
-                    success: function() {
-                        UI.SuccessMessage("Recursos enviados com sucesso!");
+                TribalWars.post(
+                    'market',
+                    { ajaxaction: 'map_send', village: btn.data("src") },
+                    postData,
+                    function() {
+                        UI.SuccessMessage("Recursos enviados!");
                         rowElement.fadeOut(200, function() {
                             $(this).remove();
                             updateCounter();
                         });
                     },
-                    error: function(xhr, status, error) {
-                        UI.ErrorMessage("Erro no envio: " + (error || "Tenta novamente"));
-                        btn.prop("disabled", false).text("Enviar");
+                    function(error) {
+                        // Fallback com envio tradicional caso o ajaxaction falhe
+                        $.ajax({
+                            url: `/game.php?village=${btn.data("src")}&screen=market&mode=send&action=send`,
+                            type: 'POST',
+                            data: $.extend(postData, { h: game_data.csrf }),
+                            success: function() {
+                                UI.SuccessMessage("Recursos enviados!");
+                                rowElement.fadeOut(200, function() {
+                                    $(this).remove();
+                                    updateCounter();
+                                });
+                            },
+                            error: function(xhr, status, err) {
+                                UI.ErrorMessage("Erro ao enviar: " + (err || "Tenta novamente"));
+                                btn.prop("disabled", false).text("Enviar");
+                            }
+                        });
                     }
-                });
+                );
             });
         }
 
