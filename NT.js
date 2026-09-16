@@ -70,7 +70,7 @@ javascript:(function() {
     ${cssSophie}
     <div id="sophieNTModal">
         <div class="sophHeader">
-            <span>⚔️ NT Resource Balancer (v11 - Full Production & Queue Sync)</span>
+            <span>⚔️ NT Resource Balancer (v12 - Native Combined Parser)</span>
             <span onclick="$('#sophieNTModal').remove();" style="cursor:pointer;font-size:16px;">✖</span>
         </div>
         <div id="ntBody" style="padding: 12px;">
@@ -88,7 +88,7 @@ javascript:(function() {
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A mapear nobres existentes, ordens em treino e transportes...</b></p>
+                <p style="font-size:13px;"><b>A mapear aldeias, recursos e tropas...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
@@ -153,14 +153,27 @@ javascript:(function() {
         $("#ntConfigStep").hide();
         $("#ntLoadingStep").show();
 
-        // 1. Mapear Todas as Aldeias da conta via mode=prod com group=0
-        $("#ntLoadingStatus").text("A recolher dados e IDs de todas as aldeias...");
         let accountVillages = {};
-        try {
-            let prodAllHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod&group=0`);
-            let docProdAll = $(prodAllHtml);
 
-            docProdAll.find("#production_table tr").each(function() {
+        // 1. Leitura Completa via Vista Combinada
+        $("#ntLoadingStatus").text("A carregar visão combinada global...");
+        try {
+            let combHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=combined&group=0`);
+            let docComb = $(combHtml);
+            let tbl = docComb.find("#combined_table");
+
+            // Mapeamento dinâmico de colunas
+            let snobColIndex = -1;
+            let headerRow = tbl.find("tr:first");
+            headerRow.find("th, td").each(function(idx) {
+                let cellHtml = $(this).html();
+                if (cellHtml.includes("unit_snob") || cellHtml.includes("snob.png") || cellHtml.includes("unit=snob")) {
+                    snobColIndex = idx;
+                }
+            });
+            logDebug(`Coluna Snob identificada no índice: ${snobColIndex}`);
+
+            tbl.find("tr").each(function() {
                 let r = $(this);
                 let link = r.find(".quickedit-vn");
                 if (!link.length) return;
@@ -173,15 +186,41 @@ javascript:(function() {
                     let coord = coordM[1];
                     let [x, y] = coord.split("|").map(Number);
 
-                    let w = parseInt(r.find(".wood").text().replace(/\./g, '')) || 0;
-                    let c = parseInt(r.find(".stone").text().replace(/\./g, '')) || 0;
-                    let i = parseInt(r.find(".iron").text().replace(/\./g, '')) || 0;
+                    // Extração flexível de recursos
+                    let rowText = r.text();
+                    let w = 0, c = 0, i = 0;
 
+                    // Método 1: seletores nativos
+                    let wElem = r.find(".wood, [class*='wood']").not("th");
+                    let cElem = r.find(".stone, [class*='stone']").not("th");
+                    let iElem = r.find(".iron, [class*='iron']").not("th");
+
+                    if (wElem.length) w = parseInt(wElem.text().replace(/\D/g, '')) || 0;
+                    if (cElem.length) c = parseInt(cElem.text().replace(/\D/g, '')) || 0;
+                    if (iElem.length) i = parseInt(iElem.text().replace(/\D/g, '')) || 0;
+
+                    // Método 2: Fallback por regex se o seletor falhar
+                    if (w === 0 && c === 0 && i === 0) {
+                        let resMatches = rowText.match(/(\d{1,3}(?:\.\d{3})*|\d+)\s+(\d{1,3}(?:\.\d{3})*|\d+)\s+(\d{1,3}(?:\.\d{3})*|\d+)/);
+                        if (resMatches) {
+                            w = parseInt(resMatches[1].replace(/\./g, '')) || 0;
+                            c = parseInt(resMatches[2].replace(/\./g, '')) || 0;
+                            i = parseInt(resMatches[3].replace(/\./g, '')) || 0;
+                        }
+                    }
+
+                    // Mercadores (ex: 110/110)
                     let merc = 0;
                     r.find("td").each(function() {
                         let m = $(this).text().trim().match(/^(\d+)\/(\d+)$/);
                         if (m) { merc = parseInt(m[1]) || 0; return false; }
                     });
+
+                    // Nobres
+                    let snobs = 0;
+                    if (snobColIndex !== -1) {
+                        snobs = parseInt(r.find("td").eq(snobColIndex).text().trim()) || 0;
+                    }
 
                     accountVillages[coord] = {
                         id: vid,
@@ -192,53 +231,45 @@ javascript:(function() {
                         c: c,
                         i: i,
                         merc: merc,
-                        snobs: 0
+                        snobs: snobs
                     };
                 }
             });
-            logDebug(`Aldeias mapeadas na conta: ${Object.keys(accountVillages).length}`);
+            logDebug(`Aldeias mapeadas na visão combinada: ${Object.keys(accountVillages).length}`);
         } catch(e) {
-            logDebug(`Erro ao ler produção geral: ${e}`);
+            logDebug(`Erro ao ler visão combinada: ${e}`);
         }
 
-        // 2. Extração de Nobres (Existentes + Em Treino) via mode=mass
-        $("#ntLoadingStatus").text("A ler nobres existentes e em produção...");
-        try {
-            let trainHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=train&mode=mass`);
-            let docTrain = $(trainHtml);
-
-            docTrain.find("tr[id^='village_']").each(function() {
-                let r = $(this);
-                let link = r.find(".quickedit-vn");
-                let coordM = link.text().match(/(\d{3}\|\d{3})/);
-                
-                if (coordM && accountVillages[coordM[1]]) {
-                    let coord = coordM[1];
-                    let snobInput = r.find("input[name*='[snob]']");
-                    if (snobInput.length) {
-                        let cell = snobInput.closest("td");
-                        let currentSnobs = parseInt(cell.text().trim()) || 0;
-                        
-                        let inQueue = 0;
-                        r.find("a[href*='action=cancel']").each(function() {
-                            let cancelLink = $(this);
-                            let pRow = cancelLink.closest("tr").text();
-                            if (pRow.includes("Nobre") || cancelLink.prev().attr("src")?.includes("snob")) {
-                                inQueue++;
-                            }
-                        });
-
-                        accountVillages[coord].snobs = currentSnobs + inQueue;
+        // 2. Fallback Específico de Recursos via mode=prod (para garantir armazéns caso a combinada oculte recursos)
+        let sampleCoord = Object.keys(accountVillages)[0];
+        if (sampleCoord && accountVillages[sampleCoord].w === 0 && accountVillages[sampleCoord].c === 0) {
+            $("#ntLoadingStatus").text("A ajustar leitura de recursos via vista de produção...");
+            try {
+                let prodHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod&group=0`);
+                let docProd = $(prodHtml);
+                docProd.find("#production_table tr").each(function() {
+                    let r = $(this);
+                    let link = r.find(".quickedit-vn");
+                    if (!link.length) return;
+                    let coordM = link.text().match(/(\d{3}\|\d{3})/);
+                    if (coordM && accountVillages[coordM[1]]) {
+                        let entry = accountVillages[coordM[1]];
+                        let rawWood = r.find("span.wood, .wood").text().replace(/\D/g, '');
+                        let rawStone = r.find("span.stone, .stone").text().replace(/\D/g, '');
+                        let rawIron = r.find("span.iron, .iron").text().replace(/\D/g, '');
+                        if (rawWood) entry.w = parseInt(rawWood) || 0;
+                        if (rawStone) entry.c = parseInt(rawStone) || 0;
+                        if (rawIron) entry.i = parseInt(rawIron) || 0;
                     }
-                }
-            });
-            logDebug("Nobres existentes e em fila de treino contabilizados.");
-        } catch(e) {
-            logDebug(`Aviso ao ler treinos: ${e}`);
+                });
+                logDebug("Recursos corrigidos via tabela de produção.");
+            } catch(e) {
+                logDebug(`Aviso ao ler produção: ${e}`);
+            }
         }
 
         // 3. Transportes a caminho via mode=trader
-        $("#ntLoadingStatus").text("A somar recursos a caminho no mercado...");
+        $("#ntLoadingStatus").text("A somar recursos em trânsito...");
         let incomingRes = {};
         try {
             let traderHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=trader`);
@@ -252,9 +283,9 @@ javascript:(function() {
                     let destCoord = destMatch[1];
                     if (!incomingRes[destCoord]) incomingRes[destCoord] = { w: 0, c: 0, i: 0 };
 
-                    let w = parseInt(r.find(".wood").text().replace(/\./g, '')) || 0;
-                    let c = parseInt(r.find(".stone").text().replace(/\./g, '')) || 0;
-                    let i = parseInt(r.find(".iron").text().replace(/\./g, '')) || 0;
+                    let w = parseInt(r.find(".wood").text().replace(/\D/g, '')) || 0;
+                    let c = parseInt(r.find(".stone").text().replace(/\D/g, '')) || 0;
+                    let i = parseInt(r.find(".iron").text().replace(/\D/g, '')) || 0;
 
                     incomingRes[destCoord].w += w;
                     incomingRes[destCoord].c += c;
@@ -266,32 +297,16 @@ javascript:(function() {
             logDebug("Aviso: Falha ao ler transportes.");
         }
 
-        // 4. Seleção de dadoras elegíveis (grupo ativo atual)
+        // 4. Dadoras elegíveis
         let groupVillages = [];
-        $("#production_table tbody tr").each(function() {
-            let r = $(this);
-            let link = r.find(".quickedit-vn");
-            if (!link.length) return;
-
-            let coordM = link.text().match(/(\d{3}\|\d{3})/);
-            if (coordM) {
-                let coord = coordM[1];
-                if (!uniqueTargets.includes(coord) && accountVillages[coord]) {
-                    groupVillages.push(accountVillages[coord]);
-                }
+        Object.keys(accountVillages).forEach(coord => {
+            if (!uniqueTargets.includes(coord)) {
+                groupVillages.push(accountVillages[coord]);
             }
         });
-
-        if (groupVillages.length === 0) {
-            Object.keys(accountVillages).forEach(coord => {
-                if (!uniqueTargets.includes(coord)) {
-                    groupVillages.push(accountVillages[coord]);
-                }
-            });
-        }
         logDebug(`Dadoras ativas elegíveis: ${groupVillages.length}`);
 
-        // 5. Cálculo dos défices (ignora capacidade máxima de armazém)
+        // 5. Cálculo dos défices
         let targets = [];
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
@@ -309,7 +324,7 @@ javascript:(function() {
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
 
-            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres (+treino): [${currentNobles}/${targetNobles}] | Défice: ${defW}W ${defC}C ${defI}I`);
+            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres: [${currentNobles}/${targetNobles}] | Armazém: ${localV.w}W ${localV.c}C ${localV.i}I | Défice: ${defW}W ${defC}C ${defI}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
@@ -322,7 +337,7 @@ javascript:(function() {
             }
         });
 
-        // 6. Algoritmo Guloso (Menor Distância)
+        // 6. Distribuição dos envios
         let transfers = [];
         targets.forEach(t => {
             groupVillages.sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y));
@@ -382,7 +397,7 @@ javascript:(function() {
         }
 
         if (transfers.length === 0) {
-            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio necessário com base nos recursos, nobres e transportes já existentes.</td></tr>`);
+            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio necessário com base nos recursos e transportes atuais.</td></tr>`);
             $("#ntSummaryText").text("Nenhum envio gerado.");
             $("#debugLog").show();
         } else {
