@@ -3,15 +3,15 @@ javascript:(function() {
     <style>
         #sophieNTModal {
             position: fixed;
-            top: 40px;
+            top: 30px;
             left: 50%;
             transform: translateX(-50%);
             width: 860px;
-            max-height: 85vh;
+            max-height: 88vh;
             background-color: #F4E4BC;
             border: 3px solid #803000;
             z-index: 999999;
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            box-shadow: 0 0 25px rgba(0,0,0,0.85);
             font-family: Verdana, Arial, sans-serif;
             font-size: 11px;
             color: #000;
@@ -27,26 +27,39 @@ javascript:(function() {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 2px solid #803000;
         }
         .sophRowA { background-color: #F4E4BC; }
         .sophRowB { background-color: #fff5da; }
-        .sophTable { width: 100%; border-collapse: collapse; }
+        .sophTable { width: 100%; border-collapse: collapse; margin-top: 5px; }
         .sophTable th { background-color: #c6a768; color: #803000; padding: 6px; border: 1px solid #803000; }
         .sophTable td { padding: 5px; text-align: center; border: 1px solid #d2b48c; }
         .btnSophie {
             background: linear-gradient(to bottom, #947a62 0%,#7b5c3d 22%,#6c4824 30%,#6c4824 100%);
             color: white !important;
             border: 1px solid #3b240f;
-            padding: 4px 10px;
+            padding: 5px 12px;
             cursor: pointer;
             font-weight: bold;
-            border-radius: 2px;
+            border-radius: 3px;
         }
         .btnSophie:hover { background: linear-gradient(to bottom, #b69471 0%,#9f764d 22%,#8f6133 30%,#6c4d2d 100%); }
         .btnSophie:disabled { background: #888; cursor: not-allowed; }
         .resWood { color: #804000; font-weight: bold; }
         .resStone { color: #a84000; font-weight: bold; }
         .resIron { color: #505050; font-weight: bold; }
+        .debugBox {
+            margin-top: 10px;
+            padding: 8px;
+            background: #222;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 10px;
+            max-height: 180px;
+            overflow-y: auto;
+            text-align: left;
+            border-radius: 3px;
+        }
     </style>`;
 
     $("#sophieNTModal").remove();
@@ -57,12 +70,12 @@ javascript:(function() {
     ${cssSophie}
     <div id="sophieNTModal">
         <div class="sophHeader">
-            <span>⚔️ NT Resource Balancer (v3 - Robust Fix)</span>
+            <span>⚔️ NT Resource Balancer (Padrão Sophie)</span>
             <span onclick="$('#sophieNTModal').remove();" style="cursor:pointer;font-size:16px;">✖</span>
         </div>
         <div id="ntBody" style="padding: 12px;">
             <div id="ntConfigStep">
-                <p><b>1. Introduz as coordenadas alvo</b> (formato: <code>xxx|yyy</code>):</p>
+                <p><b>1. Introduz as coordenadas onde queres fazer NT:</b></p>
                 <textarea id="targetCoordsInput" rows="3" style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px;">354|615 356|615 361|623 363|623 351|619 361|622 352|631</textarea>
                 
                 <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between;">
@@ -70,20 +83,24 @@ javascript:(function() {
                         <label><b>Nobres por aldeia: </b></label>
                         <input type="number" id="noblesCountInput" value="4" min="1" max="10" style="width: 45px; text-align: center;">
                     </div>
-                    <button class="btnSophie" id="btnRunOptimizer">Calcular Envios</button>
+                    <button class="btnSophie" id="btnRunOptimizer">Carregar Dados e Otimizar</button>
                 </div>
             </div>
 
-            <div id="ntLoadingStep" style="display:none; text-align:center; padding: 20px;">
-                <p><b>A processar transportes e aldeias disponíveis...</b></p>
-                <div id="ntLoadingStatus" style="font-size:12px; color:#803000;"></div>
+            <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
+                <p style="font-size:13px;"><b>A carregar dados do grupo em segundo plano...</b></p>
+                <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
             <div id="ntResultStep" style="display:none;">
                 <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px;">
-                    <span id="ntSummaryText" style="font-weight:bold;"></span>
-                    <button class="btnSophie" id="btnBackConfig">Voltar</button>
+                    <span id="ntSummaryText" style="font-weight:bold; font-size:12px;"></span>
+                    <div>
+                        <button class="btnSophie" id="btnToggleDebug" style="background:#555;margin-right:5px;">Ver Debug</button>
+                        <button class="btnSophie" id="btnBackConfig">Voltar</button>
+                    </div>
                 </div>
+                <div id="debugLog" class="debugBox" style="display:none;"></div>
                 <table class="sophTable">
                     <thead>
                         <tr>
@@ -105,6 +122,15 @@ javascript:(function() {
 
     $("body").append(modalHtml);
 
+    let debugLines = [];
+    function logDebug(msg) {
+        let ts = new Date().toLocaleTimeString();
+        debugLines.push(`[${ts}] ${msg}`);
+        $("#debugLog").html(debugLines.join("<br>"));
+    }
+
+    $("#btnToggleDebug").click(() => $("#debugLog").slideToggle());
+
     $("#btnBackConfig").click(() => {
         $("#ntResultStep").hide();
         $("#ntLoadingStep").hide();
@@ -112,11 +138,12 @@ javascript:(function() {
     });
 
     $("#btnRunOptimizer").click(async function() {
+        debugLines = [];
         let rawInput = $("#targetCoordsInput").val();
         let targetMatches = rawInput.match(/\d{3}\|\d{3}/g);
 
         if (!targetMatches || targetMatches.length === 0) {
-            UI.ErrorMessage("Nenhuma coordenada válida encontrada!");
+            UI.ErrorMessage("Nenhuma coordenada válida inserida!");
             return;
         }
 
@@ -125,39 +152,43 @@ javascript:(function() {
 
         $("#ntConfigStep").hide();
         $("#ntLoadingStep").show();
-        $("#ntLoadingStatus").text("A ler tabela de aldeias...");
+        $("#ntLoadingStatus").text("A ler vista de produção em background...");
+        logDebug(`Alvos definidos (${uniqueTargets.length}): ${uniqueTargets.join(", ")}`);
+        logDebug(`Nobres por alvo: ${targetNobles}`);
 
-        // 1. Extração robusta das aldeias na vista de Produção
+        // 1. Fetch da Produção em AJAX (independente do ecrã onde o utilizador está)
+        let prodUrl = `/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod`;
         let groupVillages = [];
         let allVillagesMap = {};
 
-        let table = $("#production_table").length ? $("#production_table") : $("#combined_table");
+        try {
+            let prodHtml = await $.get(prodUrl);
+            let docProd = $(prodHtml);
+            let rows = docProd.find("#production_table tr");
+            logDebug(`Linhas encontradas na produção: ${rows.length}`);
 
-        table.find("tbody tr, tr").each(function() {
-            let row = $(this);
-            let text = row.text();
-            let coordMatch = text.match(/(\d{3}\|\d{3})/);
-            let link = row.find("a[href*='village=']").first();
+            rows.each(function() {
+                let row = $(this);
+                let link = row.find(".quickedit-vn");
+                if (!link.length) return;
 
-            if (coordMatch && link.length) {
-                let coord = coordMatch[1];
-                let [x, y] = coord.split("|").map(Number);
-                let idMatch = (link.attr("href") || "").match(/village=(\d+)/);
+                let coordMatch = link.text().match(/(\d{3}\|\d{3})/);
+                let idMatch = (row.find("a[href*='village=']").attr("href") || "").match(/village=(\d+)/) || link.attr("data-id");
+                let villageId = typeof idMatch === 'object' && idMatch ? idMatch[1] : idMatch;
 
-                let w = parseInt(row.find(".wood").text().replace(/\./g, '')) || 0;
-                let c = parseInt(row.find(".stone").text().replace(/\./g, '')) || 0;
-                let i = parseInt(row.find(".iron").text().replace(/\./g, '')) || 0;
+                if (coordMatch && villageId) {
+                    let coord = coordMatch[1];
+                    let [x, y] = coord.split("|").map(Number);
+                    let w = parseInt(row.find(".wood").text().replace(/\./g, '')) || 0;
+                    let c = parseInt(row.find(".stone").text().replace(/\./g, '')) || 0;
+                    let i = parseInt(row.find(".iron").text().replace(/\./g, '')) || 0;
 
-                // Mercadores livres (procura padrão n/total)
-                let merc = 0;
-                let mercMatch = text.match(/(\d+)\/(\d+)/);
-                if (mercMatch) {
-                    merc = parseInt(mercMatch[1]) || 0;
-                }
+                    let mercText = row.find("td:nth-last-child(2)").text() || row.find("a[href*='mode=call']").text();
+                    let mercMatch = mercText.match(/(\d+)\/\d+/);
+                    let merc = mercMatch ? parseInt(mercMatch[1]) : 0;
 
-                if (idMatch) {
                     let vData = {
-                        id: idMatch[1],
+                        id: villageId,
                         coord: coord,
                         x: x,
                         y: y,
@@ -169,10 +200,14 @@ javascript:(function() {
                     groupVillages.push(vData);
                     allVillagesMap[coord] = vData;
                 }
-            }
-        });
+            });
 
-        // 2. Fetch dos Transportes em trânsito (não-bloqueante)
+            logDebug(`Aldeias processadas no grupo: ${groupVillages.length}`);
+        } catch(err) {
+            logDebug(`ERRO ao carregar produção: ${err}`);
+        }
+
+        // 2. Fetch dos Transportes a caminho em segundo plano
         $("#ntLoadingStatus").text("A verificar recursos a caminho...");
         let incomingRes = {};
         try {
@@ -182,7 +217,7 @@ javascript:(function() {
             
             docTrader.find("#trades_table tr").each(function() {
                 let r = $(this);
-                let destMatch = r.text().match(/(\d{3}\|\d{3})/);
+                let destMatch = r.find("td:nth-child(2)").text().match(/(\d{3}\|\d{3})/);
                 if (destMatch) {
                     let coord = destMatch[1];
                     if (!incomingRes[coord]) incomingRes[coord] = { w: 0, c: 0, i: 0 };
@@ -191,11 +226,12 @@ javascript:(function() {
                     incomingRes[coord].i += parseInt(r.find(".iron").text().replace(/\./g, '')) || 0;
                 }
             });
+            logDebug("Transportes em curso mapeados com sucesso.");
         } catch(e) {
-            console.log("Aviso: Falha ao ler transportes em curso", e);
+            logDebug("Aviso: Falha ao ler transportes em curso.");
         }
 
-        // 3. Determinação dos défices por aldeia alvo
+        // 3. Determinação dos défices reais
         let targets = [];
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
@@ -206,9 +242,11 @@ javascript:(function() {
             let totalReqC = targetNobles * CUSTO_NOBRE.c;
             let totalReqI = targetNobles * CUSTO_NOBRE.i;
 
-            let defW = Math.max(0, totalReqW - ((localV.w || 0) + (inc.w || 0)));
-            let defC = Math.max(0, totalReqC - ((localV.c || 0) + (inc.c || 0)));
-            let defI = Math.max(0, totalReqI - ((localV.i || 0) + (inc.i || 0)));
+            let defW = Math.max(0, totalReqW - (localV.w + inc.w));
+            let defC = Math.max(0, totalReqC - (localV.c + inc.c));
+            let defI = Math.max(0, totalReqI - (localV.i + inc.i));
+
+            logDebug(`Alvo ${coord} | Local: ${localV.w}/${localV.c}/${localV.i} | A caminho: ${inc.w}/${inc.c}/${inc.i} | Défice: ${defW}W ${defC}C ${defI}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
@@ -220,10 +258,9 @@ javascript:(function() {
             }
         });
 
-        // 4. Algoritmo Guloso por menor distância
+        // 4. Algoritmo Guloso (Menor Distância)
         let transfers = [];
         targets.forEach(t => {
-            // Ordena as dadoras por proximidade
             groupVillages.sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y));
 
             for (let src of groupVillages) {
@@ -266,6 +303,8 @@ javascript:(function() {
             }
         });
 
+        logDebug(`Total de transferências geradas: ${transfers.length}`);
+
         let tbody = $("#ntTableBody");
         tbody.empty();
 
@@ -280,8 +319,9 @@ javascript:(function() {
         }
 
         if (transfers.length === 0) {
-            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Não foram encontrados excedentes ou mercadores livres nas aldeias carregadas para abastecer estas coordenadas.</td></tr>`);
+            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio necessário ou as aldeias do grupo não têm recursos/mercadores suficientes. Carrega em 'Ver Debug' para analisar.</td></tr>`);
             $("#ntSummaryText").text("Nenhum envio gerado.");
+            $("#debugLog").show();
         } else {
             transfers.forEach((tr, index) => {
                 let rowClass = index % 2 === 0 ? "sophRowA" : "sophRowB";
