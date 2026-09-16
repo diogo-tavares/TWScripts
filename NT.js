@@ -1,9 +1,4 @@
 javascript:(function() {
-    if (!window.location.href.includes("mode=prod")) {
-        UI.ErrorMessage("Executa o script em: Visualizações -> Produção (com o grupo de envio selecionado)!");
-        return;
-    }
-
     const cssSophie = `
     <style>
         #sophieNTModal {
@@ -11,7 +6,7 @@ javascript:(function() {
             top: 40px;
             left: 50%;
             transform: translateX(-50%);
-            width: 840px;
+            width: 860px;
             max-height: 85vh;
             background-color: #F4E4BC;
             border: 3px solid #803000;
@@ -62,32 +57,32 @@ javascript:(function() {
     ${cssSophie}
     <div id="sophieNTModal">
         <div class="sophHeader">
-            <span>⚔️ NT Resource Balancer (Cálculo Automático de Défice)</span>
+            <span>⚔️ NT Resource Balancer (v3 - Robust Fix)</span>
             <span onclick="$('#sophieNTModal').remove();" style="cursor:pointer;font-size:16px;">✖</span>
         </div>
         <div id="ntBody" style="padding: 12px;">
             <div id="ntConfigStep">
-                <p><b>1. Introduz as coordenadas das aldeias alvo</b> (Formato: <code>xxx|yyy</code>):</p>
-                <textarea id="targetCoordsInput" rows="4" style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px;" placeholder="Ex: 500|500 501|502"></textarea>
+                <p><b>1. Introduz as coordenadas alvo</b> (formato: <code>xxx|yyy</code>):</p>
+                <textarea id="targetCoordsInput" rows="3" style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px;">354|615 356|615 361|623 363|623 351|619 361|622 352|631</textarea>
                 
                 <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between;">
                     <div>
-                        <label><b>Nobres pretendidos por aldeia: </b></label>
+                        <label><b>Nobres por aldeia: </b></label>
                         <input type="number" id="noblesCountInput" value="4" min="1" max="10" style="width: 45px; text-align: center;">
                     </div>
-                    <button class="btnSophie" id="btnRunOptimizer">Carregar Dados e Otimizar</button>
+                    <button class="btnSophie" id="btnRunOptimizer">Calcular Envios</button>
                 </div>
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 20px;">
-                <p><b>A analisar transportes a caminho e nobres em recrutamento...</b></p>
+                <p><b>A processar transportes e aldeias disponíveis...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000;"></div>
             </div>
 
             <div id="ntResultStep" style="display:none;">
                 <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px;">
                     <span id="ntSummaryText" style="font-weight:bold;"></span>
-                    <button class="btnSophie" id="btnBackConfig">Reconfigurar</button>
+                    <button class="btnSophie" id="btnBackConfig">Voltar</button>
                 </div>
                 <table class="sophTable">
                     <thead>
@@ -130,124 +125,90 @@ javascript:(function() {
 
         $("#ntConfigStep").hide();
         $("#ntLoadingStep").show();
-        $("#ntLoadingStatus").text("A ler inventário das aldeias do grupo...");
+        $("#ntLoadingStatus").text("A ler tabela de aldeias...");
 
-        // 1. Mapeamento das aldeias do ecrã de Produção atual
+        // 1. Extração robusta das aldeias na vista de Produção
         let groupVillages = [];
         let allVillagesMap = {};
 
-        $("#production_table tbody tr").each(function() {
+        let table = $("#production_table").length ? $("#production_table") : $("#combined_table");
+
+        table.find("tbody tr, tr").each(function() {
             let row = $(this);
-            let link = row.find(".quickedit-vn");
-            if (!link.length) return;
+            let text = row.text();
+            let coordMatch = text.match(/(\d{3}\|\d{3})/);
+            let link = row.find("a[href*='village=']").first();
 
-            let mCoord = link.text().match(/\((\d{3}\|\d{3})\)/);
-            let idMatch = link.attr("data-id") || (row.find("a[href*='village=']").attr("href") || "").match(/village=(\d+)/);
+            if (coordMatch && link.length) {
+                let coord = coordMatch[1];
+                let [x, y] = coord.split("|").map(Number);
+                let idMatch = (link.attr("href") || "").match(/village=(\d+)/);
 
-            if (mCoord && idMatch) {
-                let [x, y] = mCoord[1].split("|").map(Number);
                 let w = parseInt(row.find(".wood").text().replace(/\./g, '')) || 0;
                 let c = parseInt(row.find(".stone").text().replace(/\./g, '')) || 0;
                 let i = parseInt(row.find(".iron").text().replace(/\./g, '')) || 0;
 
-                let mercText = row.find("td:nth-last-child(2) a").text() || row.find("a[href*='mode=call']").text();
-                let mercMatch = mercText.match(/(\d+)\/\d+/) || [0, 0];
-                let merc = parseInt(mercMatch[1]) || 0;
+                // Mercadores livres (procura padrão n/total)
+                let merc = 0;
+                let mercMatch = text.match(/(\d+)\/(\d+)/);
+                if (mercMatch) {
+                    merc = parseInt(mercMatch[1]) || 0;
+                }
 
-                let vData = {
-                    id: idMatch[1],
-                    coord: mCoord[1],
-                    x: x,
-                    y: y,
-                    w: w,
-                    c: c,
-                    i: i,
-                    merc: merc
-                };
-
-                groupVillages.push(vData);
-                allVillagesMap[mCoord[1]] = vData;
+                if (idMatch) {
+                    let vData = {
+                        id: idMatch[1],
+                        coord: coord,
+                        x: x,
+                        y: y,
+                        w: w,
+                        c: c,
+                        i: i,
+                        merc: merc
+                    };
+                    groupVillages.push(vData);
+                    allVillagesMap[coord] = vData;
+                }
             }
         });
 
-        // 2. Fetch de nobres em treino (mode=units)
-        $("#ntLoadingStatus").text("A verificar nobres existentes e em produção...");
-        let trainingNobles = {};
-        try {
-            let unitsHtml = await $.get(TribalWars.buildURL('GET', 'overview_villages', { mode: 'units' }));
-            let docUnits = $(unitsHtml);
-            docUnits.find("#units_table tbody tr").each(function() {
-                let r = $(this);
-                let link = r.find(".quickedit-vn");
-                if (!link.length) return;
-                let m = link.text().match(/\((\d{3}\|\d{3})\)/);
-                if (m) {
-                    let coord = m[1];
-                    let snobCol = r.find("td.unit-item-snob");
-                    let snobsHere = parseInt(snobCol.text().trim()) || 0;
-                    trainingNobles[coord] = snobsHere;
-                }
-            });
-
-            // Adiciona nobres na fila de recrutamento (se houver tabela de ordens de recrutamento)
-            docUnits.find("tr[data-unit='snob']").each(function() {
-                let r = $(this);
-                let vLink = r.closest("table").find(".quickedit-vn");
-                let m = vLink.text().match(/\((\d{3}\|\d{3})\)/);
-                if (m) {
-                    let coord = m[1];
-                    let inQueue = parseInt(r.find("td:last").text()) || 0;
-                    trainingNobles[coord] = (trainingNobles[coord] || 0) + inQueue;
-                }
-            });
-        } catch(e) {
-            console.warn("Não foi possível carregar a vista de unidades", e);
-        }
-
-        // 3. Fetch de transportes a caminho (mode=transports)
-        $("#ntLoadingStatus").text("A somar recursos em trânsito com destino aos alvos...");
+        // 2. Fetch dos Transportes em trânsito (não-bloqueante)
+        $("#ntLoadingStatus").text("A verificar recursos a caminho...");
         let incomingRes = {};
         try {
-            let traderHtml = await $.get(TribalWars.buildURL('GET', 'overview_villages', { mode: 'trader' }));
+            let traderUrl = `/game.php?village=${game_data.village.id}&screen=overview_villages&mode=trader`;
+            let traderHtml = await $.get(traderUrl);
             let docTrader = $(traderHtml);
             
             docTrader.find("#trades_table tr").each(function() {
                 let r = $(this);
-                let dest = r.find("td:nth-child(2)").text().match(/\((\d{3}\|\d{3})\)/);
-                if (dest) {
-                    let coord = dest[1];
+                let destMatch = r.text().match(/(\d{3}\|\d{3})/);
+                if (destMatch) {
+                    let coord = destMatch[1];
                     if (!incomingRes[coord]) incomingRes[coord] = { w: 0, c: 0, i: 0 };
-
-                    let w = parseInt(r.find(".wood").text().replace(/\./g, '')) || 0;
-                    let c = parseInt(r.find(".stone").text().replace(/\./g, '')) || 0;
-                    let i = parseInt(r.find(".iron").text().replace(/\./g, '')) || 0;
-
-                    incomingRes[coord].w += w;
-                    incomingRes[coord].c += c;
-                    incomingRes[coord].i += i;
+                    incomingRes[coord].w += parseInt(r.find(".wood").text().replace(/\./g, '')) || 0;
+                    incomingRes[coord].c += parseInt(r.find(".stone").text().replace(/\./g, '')) || 0;
+                    incomingRes[coord].i += parseInt(r.find(".iron").text().replace(/\./g, '')) || 0;
                 }
             });
         } catch(e) {
-            console.warn("Não foi possível carregar os transportes", e);
+            console.log("Aviso: Falha ao ler transportes em curso", e);
         }
 
-        // 4. Determinação dos défices reais por alvo
+        // 3. Determinação dos défices por aldeia alvo
         let targets = [];
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
             let localV = allVillagesMap[coord] || { w: 0, c: 0, i: 0 };
             let inc = incomingRes[coord] || { w: 0, c: 0, i: 0 };
-            let currentNobles = trainingNobles[coord] || 0;
 
-            let nobresEmFalta = Math.max(0, targetNobles - currentNobles);
+            let totalReqW = targetNobles * CUSTO_NOBRE.w;
+            let totalReqC = targetNobles * CUSTO_NOBRE.c;
+            let totalReqI = targetNobles * CUSTO_NOBRE.i;
 
-            let totalReqW = nobresEmFalta * CUSTO_NOBRE.w;
-            let totalReqC = nobresEmFalta * CUSTO_NOBRE.c;
-            let totalReqI = nobresEmFalta * CUSTO_NOBRE.i;
-
-            let defW = Math.max(0, totalReqW - (localV.w + inc.w));
-            let defC = Math.max(0, totalReqC - (localV.c + inc.c));
-            let defI = Math.max(0, totalReqI - (localV.i + inc.i));
+            let defW = Math.max(0, totalReqW - ((localV.w || 0) + (inc.w || 0)));
+            let defC = Math.max(0, totalReqC - ((localV.c || 0) + (inc.c || 0)));
+            let defI = Math.max(0, totalReqI - ((localV.i || 0) + (inc.i || 0)));
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
@@ -259,9 +220,10 @@ javascript:(function() {
             }
         });
 
-        // 5. Algoritmo Guloso (Menor Distância)
+        // 4. Algoritmo Guloso por menor distância
         let transfers = [];
         targets.forEach(t => {
+            // Ordena as dadoras por proximidade
             groupVillages.sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y));
 
             for (let src of groupVillages) {
@@ -310,7 +272,7 @@ javascript:(function() {
         function updateCounter() {
             let restantes = $("#ntTableBody tr.task-row").length;
             if (restantes === 0) {
-                $("#ntSummaryText").html("<span style='color:green;'>✔️ Todas as ordens foram concluídas!</span>");
+                $("#ntSummaryText").html("<span style='color:green;'>✔️ Todas as tarefas foram concluídas!</span>");
                 tbody.html("<tr><td colspan='8' style='padding: 15px; font-weight: bold; color: green;'>Plano de envios concluído com sucesso.</td></tr>");
             } else {
                 $("#ntSummaryText").text(`Tarefas pendentes: ${restantes}`);
@@ -318,8 +280,8 @@ javascript:(function() {
         }
 
         if (transfers.length === 0) {
-            tbody.append("<tr><td colspan='8' style='padding: 10px;'>As aldeias já possuem recursos/nobres suficientes ou não há capacidade no grupo.</td></tr>");
-            $("#ntSummaryText").text("Nenhum envio necessário.");
+            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Não foram encontrados excedentes ou mercadores livres nas aldeias carregadas para abastecer estas coordenadas.</td></tr>`);
+            $("#ntSummaryText").text("Nenhum envio gerado.");
         } else {
             transfers.forEach((tr, index) => {
                 let rowClass = index % 2 === 0 ? "sophRowA" : "sophRowB";
