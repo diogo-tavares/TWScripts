@@ -6,7 +6,7 @@ javascript:(function() {
             top: 25px;
             left: 50%;
             transform: translateX(-50%);
-            width: 880px;
+            width: 890px;
             max-height: 88vh;
             background-color: #F4E4BC;
             border: 3px solid #803000;
@@ -70,7 +70,7 @@ javascript:(function() {
     ${cssSophie}
     <div id="sophieNTModal">
         <div class="sophHeader">
-            <span>⚔️ NT Resource Balancer (v5 - Sync Completo)</span>
+            <span>⚔️ NT Resource Balancer (v7 - Send & Filter Fix)</span>
             <span onclick="$('#sophieNTModal').remove();" style="cursor:pointer;font-size:16px;">✖</span>
         </div>
         <div id="ntBody" style="padding: 12px;">
@@ -83,12 +83,12 @@ javascript:(function() {
                         <label><b>Nobres pretendidos por aldeia: </b></label>
                         <input type="number" id="noblesCountInput" value="4" min="1" max="10" style="width: 45px; text-align: center;">
                     </div>
-                    <button class="btnSophie" id="btnRunOptimizer">Carregar e Calcular</button>
+                    <button class="btnSophie" id="btnRunOptimizer">Carregar e Otimizar</button>
                 </div>
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A sincronizar unidades, transportes e recursos...</b></p>
+                <p style="font-size:13px;"><b>A calcular défices e alocar mercadores...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
@@ -153,32 +153,48 @@ javascript:(function() {
         $("#ntConfigStep").hide();
         $("#ntLoadingStep").show();
 
-        // 1. Obter Nobres Totais (Parados + Trânsito) via mode=units
+        // 1. Obter Nobres via overview de unidades
         $("#ntLoadingStatus").text("A ler nobres existentes e a caminho...");
         let nobleCountMap = {};
         try {
-            let unitsHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=units&type=complete`);
+            let unitsHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=units`);
             let docUnits = $(unitsHtml);
-            
-            docUnits.find("table.vis tr").each(function() {
-                let row = $(this);
-                let text = row.text();
-                let coordM = text.match(/(\d{3}\|\d{3})/);
-                if (coordM) {
-                    let c = coordM[1];
-                    let totalRow = row.nextUntil("tr:has(.quickedit-vn)").filter(":contains('total')");
-                    if (totalRow.length) {
-                        let snobVal = parseInt(totalRow.find("td:nth-last-child(2)").text().trim()) || 0;
-                        nobleCountMap[c] = snobVal;
-                    }
+            let uTable = docUnits.find("#units_table");
+
+            let snobColIndex = -1;
+            uTable.find("thead th, tr:first th").each(function(idx) {
+                if ($(this).find("img[src*='unit_snob']").length) {
+                    snobColIndex = idx;
+                    return false;
                 }
             });
-            logDebug(`Nobres mapeados via overview: ${JSON.stringify(nobleCountMap)}`);
+
+            if (snobColIndex !== -1) {
+                uTable.find("tbody tr, tr").each(function() {
+                    let r = $(this);
+                    let link = r.find(".quickedit-vn");
+                    if (link.length) {
+                        let m = link.text().match(/(\d{3}\|\d{3})/);
+                        if (m) {
+                            let coord = m[1];
+                            let totalRow = r.nextUntil("tr:has(.quickedit-vn)").filter(":contains('total')");
+                            let snobQty = 0;
+                            if (totalRow.length) {
+                                snobQty = parseInt(totalRow.find("td").eq(snobColIndex).text().trim()) || 0;
+                            } else {
+                                snobQty = parseInt(r.find("td").eq(snobColIndex).text().trim()) || 0;
+                            }
+                            nobleCountMap[coord] = snobQty;
+                        }
+                    }
+                });
+            }
+            logDebug(`Nobres mapeados via units: ${JSON.stringify(nobleCountMap)}`);
         } catch(e) {
             logDebug("Aviso: Falha ao carregar vista de unidades.");
         }
 
-        // 2. Obter Transportes a Chegar via mode=trader
+        // 2. Transportes a caminho via mode=trader
         $("#ntLoadingStatus").text("A somar recursos a caminho no mercado...");
         let incomingRes = {};
         try {
@@ -190,7 +206,7 @@ javascript:(function() {
                 let text = r.text();
                 let destMatch = text.match(/(\d{3}\|\d{3})/g);
                 if (destMatch && destMatch.length >= 2) {
-                    let destCoord = destMatch[1]; // O segundo par de coordenadas é o destino
+                    let destCoord = destMatch[1];
                     if (!incomingRes[destCoord]) incomingRes[destCoord] = { w: 0, c: 0, i: 0 };
 
                     let w = parseInt(r.find(".wood").text().replace(/\./g, '')) || 0;
@@ -202,13 +218,13 @@ javascript:(function() {
                     incomingRes[destCoord].i += i;
                 }
             });
-            logDebug(`Transportes a caminho mapeados.`);
+            logDebug("Transportes a caminho mapeados.");
         } catch(e) {
             logDebug("Aviso: Falha ao carregar transportes.");
         }
 
-        // 3. Obter Aldeias Dadoras (Grupo Aberto) e Recursos Alvo via mode=prod
-        $("#ntLoadingStatus").text("A carregar dadoras e armazéns das aldeias...");
+        // 3. Obter Aldeias via mode=prod
+        $("#ntLoadingStatus").text("A ler recursos e mercadores do grupo...");
         let groupVillages = [];
         let allVillagesMap = {};
 
@@ -239,23 +255,28 @@ javascript:(function() {
                     });
 
                     let vData = { id: villageId, coord: coord, x: x, y: y, w: w, c: c, i: i, merc: merc };
-                    groupVillages.push(vData);
                     allVillagesMap[coord] = vData;
+
+                    // REGRA DE OURO: Se a aldeia for um dos alvos de NT, NÃO entra como dadora
+                    if (!uniqueTargets.includes(coord)) {
+                        groupVillages.push(vData);
+                    }
                 }
             });
-            logDebug(`Dadoras carregadas: ${groupVillages.length}`);
+            logDebug(`Dadoras elegíveis (excluindo alvos): ${groupVillages.length}`);
         } catch(e) {
             logDebug(`Erro ao ler dadoras: ${e}`);
         }
 
-        // Fallback: carregar recursos das aldeias alvo que não estavam no grupo aberto
+        // 4. Fallback para alvos fora do grupo ativo (garantir ID e recursos)
         for (let coord of uniqueTargets) {
-            if (!allVillagesMap[coord]) {
+            if (!allVillagesMap[coord] || !allVillagesMap[coord].id || nobleCountMap[coord] === undefined) {
                 try {
                     let vInfoHtml = await $.get(`/game.php?screen=info_village&coord=${coord}`);
                     let docV = $(vInfoHtml);
                     let vLink = docV.find("a[href*='screen=overview']").first().attr("href");
                     let vid = vLink ? vLink.match(/village=(\d+)/)[1] : null;
+
                     if (vid) {
                         let ovHtml = await $.get(`/game.php?village=${vid}&screen=overview`);
                         let docOv = $(ovHtml);
@@ -263,17 +284,24 @@ javascript:(function() {
                         let c = parseInt(docOv.find("#stone").text().replace(/\./g, '')) || 0;
                         let i = parseInt(docOv.find("#iron").text().replace(/\./g, '')) || 0;
                         let [x, y] = coord.split("|").map(Number);
+                        
                         allVillagesMap[coord] = { id: vid, coord: coord, x: x, y: y, w: w, c: c, i: i, merc: 0 };
+
+                        if (nobleCountMap[coord] === undefined) {
+                            let snobTxt = docOv.find("strong:contains('Nobre'), a[href*='unit=snob']").parent().text();
+                            let sMatch = snobTxt.match(/(\d+)/);
+                            nobleCountMap[coord] = sMatch ? parseInt(sMatch[1]) : 0;
+                        }
                     }
                 } catch(e) {}
             }
         }
 
-        // 4. Determinação dos défices reais subtraindo Nobres Existentes + Recursos Locais + A Caminho
+        // 5. Determinação dos défices reais
         let targets = [];
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
-            let localV = allVillagesMap[coord] || { w: 0, c: 0, i: 0 };
+            let localV = allVillagesMap[coord] || { id: null, w: 0, c: 0, i: 0 };
             let inc = incomingRes[coord] || { w: 0, c: 0, i: 0 };
             let currentNobles = nobleCountMap[coord] || 0;
 
@@ -287,10 +315,11 @@ javascript:(function() {
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
 
-            logDebug(`Alvo ${coord} | Nobres:[${currentNobles}/${targetNobles}] | Req: ${defW}W ${defC}C ${defI}I`);
+            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres:[${currentNobles}/${targetNobles}] | Req: ${defW}W ${defC}C ${defI}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
+                    id: localV.id,
                     coord: coord,
                     x: x,
                     y: y,
@@ -299,7 +328,7 @@ javascript:(function() {
             }
         });
 
-        // 5. Planeamento Guloso
+        // 6. Algoritmo Guloso (Menor Distância)
         let transfers = [];
         targets.forEach(t => {
             groupVillages.sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y));
@@ -323,6 +352,7 @@ javascript:(function() {
                 transfers.push({
                     srcId: src.id,
                     srcCoord: src.coord,
+                    targetId: t.id,
                     targetCoord: t.coord,
                     targetX: t.x,
                     targetY: t.y,
@@ -358,7 +388,7 @@ javascript:(function() {
         }
 
         if (transfers.length === 0) {
-            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio necessário com base nos recursos locais, transportes e nobres contabilizados.</td></tr>`);
+            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio necessário com base nos recursos locais, transportes e nobres já existentes.</td></tr>`);
             $("#ntSummaryText").text("Nenhum envio gerado.");
             $("#debugLog").show();
         } else {
@@ -375,7 +405,7 @@ javascript:(function() {
                         <td class="resStone">${tr.c.toLocaleString()}</td>
                         <td class="resIron">${tr.i.toLocaleString()}</td>
                         <td>${tr.merc}</td>
-                        <td><button class="btnSophie send-direct-btn" data-row="${rowId}" data-src="${tr.srcId}" data-tx="${tr.targetX}" data-ty="${tr.targetY}" data-w="${tr.w}" data-c="${tr.c}" data-i="${tr.i}">Enviar</button></td>
+                        <td><button class="btnSophie send-direct-btn" data-row="${rowId}" data-src="${tr.srcId}" data-tid="${tr.targetId}" data-tx="${tr.targetX}" data-ty="${tr.targetY}" data-w="${tr.w}" data-c="${tr.c}" data-i="${tr.i}">Enviar</button></td>
                     </tr>
                 `);
             });
@@ -390,28 +420,33 @@ javascript:(function() {
                 btn.prop("disabled", true).text("A enviar...");
 
                 let postData = {
-                    target_x: btn.data("tx"),
-                    target_y: btn.data("ty"),
+                    target_id: btn.data("tid"),
+                    x: btn.data("tx"),
+                    y: btn.data("ty"),
                     wood: btn.data("w"),
                     stone: btn.data("c"),
                     iron: btn.data("i"),
                     h: game_data.csrf
                 };
 
-                TribalWars.post(
-                    'market',
-                    { ajaxaction: 'map_send', village: btn.data("src") },
-                    postData,
-                    function() {
+                let sendUrl = `/game.php?village=${btn.data("src")}&screen=market&mode=send&action=send`;
+
+                $.ajax({
+                    url: sendUrl,
+                    type: 'POST',
+                    data: postData,
+                    success: function() {
                         UI.SuccessMessage("Recursos enviados com sucesso!");
-                        rowElement.remove();
-                        updateCounter();
+                        rowElement.fadeOut(200, function() {
+                            $(this).remove();
+                            updateCounter();
+                        });
                     },
-                    function(error) {
-                        UI.ErrorMessage("Erro ao enviar: " + (error || "Tenta novamente"));
+                    error: function(xhr, status, error) {
+                        UI.ErrorMessage("Erro no envio: " + (error || "Tenta novamente"));
                         btn.prop("disabled", false).text("Enviar");
                     }
-                );
+                });
             });
         }
 
