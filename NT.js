@@ -3,10 +3,10 @@ javascript:(function() {
     <style>
         #sophieNTModal {
             position: fixed;
-            top: 25px;
+            top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            width: 890px;
+            width: 900px;
             max-height: 88vh;
             background-color: #F4E4BC;
             border: 3px solid #803000;
@@ -55,7 +55,7 @@ javascript:(function() {
             color: #0f0;
             font-family: monospace;
             font-size: 10px;
-            max-height: 200px;
+            max-height: 220px;
             overflow-y: auto;
             text-align: left;
             border-radius: 3px;
@@ -70,7 +70,7 @@ javascript:(function() {
     ${cssSophie}
     <div id="sophieNTModal">
         <div class="sophHeader">
-            <span>⚔️ NT Resource Balancer (v9 - Total Global Fix)</span>
+            <span>⚔️ NT Resource Balancer (v10 - Deep Debug & Snob Fix)</span>
             <span onclick="$('#sophieNTModal').remove();" style="cursor:pointer;font-size:16px;">✖</span>
         </div>
         <div id="ntBody" style="padding: 12px;">
@@ -88,7 +88,7 @@ javascript:(function() {
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A mapear todas as aldeias, nobres e mercadores...</b></p>
+                <p style="font-size:13px;"><b>A mapear aldeias, armazéns e tropas com debug avançado...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
@@ -153,22 +153,22 @@ javascript:(function() {
         $("#ntConfigStep").hide();
         $("#ntLoadingStep").show();
 
-        // 1. Mapeamento Total de Todas as Aldeias do Jogador (grupo 0 = todas)
-        $("#ntLoadingStatus").text("A carregar todas as aldeias da conta...");
+        // 1. Mapeamento Total de Todas as Aldeias do Jogador
+        $("#ntLoadingStatus").text("A carregar todas as aldeias da conta via visão combinada...");
         let accountVillages = {};
         try {
             let combHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=combined&group=0`);
             let docComb = $(combHtml);
 
-            // Descobrir índice do Nobre pelo cabeçalho
-            let snobIndex = -1;
-            docComb.find("#combined_table th").each(function(i) {
-                if ($(this).find("img[src*='unit_snob']").length) {
-                    snobIndex = i;
+            // Descobrir índice do Nobre procurando no cabeçalho
+            let snobColIdx = -1;
+            docComb.find("#combined_table th, #combined_table tr:first td").each(function(i) {
+                if ($(this).find("img[src*='unit_snob']").length || $(this).find("a[href*='unit=snob']").length) {
+                    snobColIdx = i;
                     return false;
                 }
             });
-            logDebug(`Índice Snob na Combinada: ${snobIndex}`);
+            logDebug(`Índice Snob na Combinada: ${snobColIdx}`);
 
             docComb.find("#combined_table tr").each(function() {
                 let r = $(this);
@@ -192,9 +192,11 @@ javascript:(function() {
                         if (m) { merc = parseInt(m[1]) || 0; return false; }
                     });
 
+                    // Extração avançada de nobres da linha
                     let snobQty = 0;
-                    if (snobIndex !== -1) {
-                        snobQty = parseInt(r.find("td").eq(snobIndex).text().trim()) || 0;
+                    if (snobColIdx !== -1) {
+                        let snobCellText = r.find("td").eq(snobColIdx).text().trim();
+                        snobQty = parseInt(snobCellText) || 0;
                     }
 
                     accountVillages[coord] = {
@@ -212,11 +214,11 @@ javascript:(function() {
             });
             logDebug(`Total de aldeias mapeadas na conta: ${Object.keys(accountVillages).length}`);
         } catch(e) {
-            logDebug(`Erro ao ler visão combinada: ${e}`);
+            logDebug(`ERRO ao ler visão combinada: ${e}`);
         }
 
         // 2. Transportes a caminho via mode=trader
-        $("#ntLoadingStatus").text("A somar recursos a caminho...");
+        $("#ntLoadingStatus").text("A contabilizar transportes de recursos em curso...");
         let incomingRes = {};
         try {
             let traderHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=trader`);
@@ -244,8 +246,8 @@ javascript:(function() {
             logDebug("Aviso: Falha ao ler transportes.");
         }
 
-        // 3. Carregar Dadoras Elegíveis respeitando o Grupo Ativo do utilizador
-        $("#ntLoadingStatus").text("A carregar grupo de envio ativo...");
+        // 3. Obter Dadoras Elegíveis respeitando o grupo ativo
+        $("#ntLoadingStatus").text("A carregar dadoras do grupo ativo...");
         let groupVillages = [];
         try {
             let prodHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod`);
@@ -259,7 +261,6 @@ javascript:(function() {
                 let coordM = link.text().match(/(\d{3}\|\d{3})/);
                 if (coordM) {
                     let coord = coordM[1];
-                    // Só é dadora se NÃO for um dos alvos de NT
                     if (!uniqueTargets.includes(coord) && accountVillages[coord]) {
                         groupVillages.push(accountVillages[coord]);
                     }
@@ -288,7 +289,7 @@ javascript:(function() {
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
 
-            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres: [${currentNobles}/${targetNobles}] | Défice: ${defW}W ${defC}C ${defI}I`);
+            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres: [${currentNobles}/${targetNobles}] | Armazém: ${localV.w}W ${localV.c}C ${localV.i}I | Défice: ${defW}W ${defC}C ${defI}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
@@ -361,7 +362,7 @@ javascript:(function() {
         }
 
         if (transfers.length === 0) {
-            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio necessário. Verifica o debug para ver os nobres e transportes detetados.</td></tr>`);
+            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio necessário. Consulta o debug acima.</td></tr>`);
             $("#ntSummaryText").text("Nenhum envio gerado.");
             $("#debugLog").show();
         } else {
@@ -393,45 +394,42 @@ javascript:(function() {
                 btn.prop("disabled", true).text("A enviar...");
 
                 let postData = {
-                    target_id: btn.data("tid") || "",
+                    target_id: btn.data("tid"),
                     x: btn.data("tx"),
                     y: btn.data("ty"),
                     wood: btn.data("w"),
                     stone: btn.data("c"),
-                    iron: btn.data("i")
+                    iron: btn.data("i"),
+                    h: game_data.csrf
                 };
 
-                TribalWars.post(
-                    'market',
-                    { ajaxaction: 'map_send', village: btn.data("src") },
-                    postData,
-                    function() {
-                        UI.SuccessMessage("Recursos enviados com sucesso!");
-                        rowElement.fadeOut(200, function() {
-                            $(this).remove();
-                            updateCounter();
-                        });
+                // Envio via endpoint padrão de mercado
+                $.ajax({
+                    url: `/game.php?village=${btn.data("src")}&screen=market&mode=send&action=send`,
+                    type: 'POST',
+                    data: postData,
+                    success: function(resp) {
+                        let isError = typeof resp === 'string' && (resp.includes("error_box") || resp.includes("Não há mercadores"));
+                        if (isError) {
+                            let errMatch = resp.match(/<div class="error_box">(.*?)<\/div>/s);
+                            let msg = errMatch ? $(errMatch[0]).text().trim() : "Recusado pelo jogo.";
+                            logDebug(`FALHA no envio de ${btn.data("src")} para ${btn.data("tx")}|${btn.data("ty")}: ${msg}`);
+                            UI.ErrorMessage(msg);
+                            btn.prop("disabled", false).text("Enviar");
+                        } else {
+                            UI.SuccessMessage("Recursos enviados!");
+                            rowElement.fadeOut(200, function() {
+                                $(this).remove();
+                                updateCounter();
+                            });
+                        }
                     },
-                    function(error) {
-                        // Fallback com POST direto
-                        $.ajax({
-                            url: `/game.php?village=${btn.data("src")}&screen=market&mode=send&action=send`,
-                            type: 'POST',
-                            data: $.extend(postData, { h: game_data.csrf }),
-                            success: function() {
-                                UI.SuccessMessage("Recursos enviados com sucesso!");
-                                rowElement.fadeOut(200, function() {
-                                    $(this).remove();
-                                    updateCounter();
-                                });
-                            },
-                            error: function(xhr, status, err) {
-                                UI.ErrorMessage("Erro ao enviar: " + (err || "Tenta novamente"));
-                                btn.prop("disabled", false).text("Enviar");
-                            }
-                        });
+                    error: function(xhr, status, err) {
+                        logDebug(`HTTP ERROR (${xhr.status}): ${err}`);
+                        UI.ErrorMessage(`Erro HTTP ${xhr.status}: Tenta novamente.`);
+                        btn.prop("disabled", false).text("Enviar");
                     }
-                );
+                });
             });
         }
 
