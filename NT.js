@@ -70,7 +70,7 @@ javascript:(function() {
     ${cssSophie}
     <div id="sophieNTModal">
         <div class="sophHeader">
-            <span>⚔️ NT Resource Balancer (Padrão Sophie)</span>
+            <span>⚔️ NT Resource Balancer (v4 - Parser Corrigido)</span>
             <span onclick="$('#sophieNTModal').remove();" style="cursor:pointer;font-size:16px;">✖</span>
         </div>
         <div id="ntBody" style="padding: 12px;">
@@ -88,7 +88,7 @@ javascript:(function() {
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A carregar dados do grupo em segundo plano...</b></p>
+                <p style="font-size:13px;"><b>A processar dadoras e rotas...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
@@ -152,11 +152,10 @@ javascript:(function() {
 
         $("#ntConfigStep").hide();
         $("#ntLoadingStep").show();
-        $("#ntLoadingStatus").text("A ler vista de produção em background...");
+        $("#ntLoadingStatus").text("A carregar dados das aldeias...");
         logDebug(`Alvos definidos (${uniqueTargets.length}): ${uniqueTargets.join(", ")}`);
-        logDebug(`Nobres por alvo: ${targetNobles}`);
 
-        // 1. Fetch da Produção em AJAX (independente do ecrã onde o utilizador está)
+        // 1. Fetch da Produção em AJAX
         let prodUrl = `/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod`;
         let groupVillages = [];
         let allVillagesMap = {};
@@ -165,7 +164,7 @@ javascript:(function() {
             let prodHtml = await $.get(prodUrl);
             let docProd = $(prodHtml);
             let rows = docProd.find("#production_table tr");
-            logDebug(`Linhas encontradas na produção: ${rows.length}`);
+            logDebug(`Linhas na tabela de produção: ${rows.length}`);
 
             rows.each(function() {
                 let row = $(this);
@@ -173,19 +172,48 @@ javascript:(function() {
                 if (!link.length) return;
 
                 let coordMatch = link.text().match(/(\d{3}\|\d{3})/);
-                let idMatch = (row.find("a[href*='village=']").attr("href") || "").match(/village=(\d+)/) || link.attr("data-id");
-                let villageId = typeof idMatch === 'object' && idMatch ? idMatch[1] : idMatch;
+                let villageId = link.attr("data-id") || (row.find("a[href*='village=']").attr("href") || "").match(/village=(\d+)/);
+                if (typeof villageId === 'object' && villageId) villageId = villageId[1];
 
                 if (coordMatch && villageId) {
                     let coord = coordMatch[1];
                     let [x, y] = coord.split("|").map(Number);
+
+                    // Recursos (vários seletores alternativos de proteção)
                     let w = parseInt(row.find(".wood").text().replace(/\./g, '')) || 0;
                     let c = parseInt(row.find(".stone").text().replace(/\./g, '')) || 0;
                     let i = parseInt(row.find(".iron").text().replace(/\./g, '')) || 0;
 
-                    let mercText = row.find("td:nth-last-child(2)").text() || row.find("a[href*='mode=call']").text();
-                    let mercMatch = mercText.match(/(\d+)\/\d+/);
-                    let merc = mercMatch ? parseInt(mercMatch[1]) : 0;
+                    if (w === 0 && c === 0 && i === 0) {
+                        // Fallback por texto da célula de recursos
+                        let resCell = row.find("span.icon.header.wood").parent();
+                        if (resCell.length) {
+                            let parts = resCell.text().replace(/\./g, '').match(/\d+/g);
+                            if (parts && parts.length >= 3) {
+                                w = parseInt(parts[0]) || 0;
+                                c = parseInt(parts[1]) || 0;
+                                i = parseInt(parts[2]) || 0;
+                            }
+                        }
+                    }
+
+                    // Mercadores disponíveis (procura por qualquer texto contendo n/total)
+                    let merc = 0;
+                    row.find("td").each(function() {
+                        let t = $(this).text().trim();
+                        let m = t.match(/^(\d+)\/(\d+)$/);
+                        if (m) {
+                            merc = parseInt(m[1]) || 0;
+                            return false;
+                        }
+                    });
+
+                    // Fallback para link do mercado
+                    if (merc === 0) {
+                        let mLink = row.find("a[href*='screen=market']").text();
+                        let m = mLink.match(/(\d+)\/\d+/);
+                        if (m) merc = parseInt(m[1]) || 0;
+                    }
 
                     let vData = {
                         id: villageId,
@@ -202,13 +230,18 @@ javascript:(function() {
                 }
             });
 
-            logDebug(`Aldeias processadas no grupo: ${groupVillages.length}`);
+            let comMerc = groupVillages.filter(v => v.merc > 0).length;
+            let comRes = groupVillages.filter(v => (v.w + v.c + v.i) > 10000).length;
+            logDebug(`Aldeias processadas: ${groupVillages.length} | Com Mercadores: ${comMerc} | Com Recursos: ${comRes}`);
+            if (groupVillages.length > 0) {
+                let sample = groupVillages[0];
+                logDebug(`Amostra [0] (${sample.coord}): Merc=${sample.merc}, W=${sample.w}, C=${sample.c}, I=${sample.i}`);
+            }
         } catch(err) {
-            logDebug(`ERRO ao carregar produção: ${err}`);
+            logDebug(`ERRO AJAX produção: ${err}`);
         }
 
-        // 2. Fetch dos Transportes a caminho em segundo plano
-        $("#ntLoadingStatus").text("A verificar recursos a caminho...");
+        // 2. Transportes a caminho (não-bloqueante)
         let incomingRes = {};
         try {
             let traderUrl = `/game.php?village=${game_data.village.id}&screen=overview_villages&mode=trader`;
@@ -226,12 +259,12 @@ javascript:(function() {
                     incomingRes[coord].i += parseInt(r.find(".iron").text().replace(/\./g, '')) || 0;
                 }
             });
-            logDebug("Transportes em curso mapeados com sucesso.");
+            logDebug("Transportes mapeados.");
         } catch(e) {
-            logDebug("Aviso: Falha ao ler transportes em curso.");
+            logDebug("Aviso: Falha ao ler transportes.");
         }
 
-        // 3. Determinação dos défices reais
+        // 3. Determinação de défices
         let targets = [];
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
@@ -245,8 +278,6 @@ javascript:(function() {
             let defW = Math.max(0, totalReqW - (localV.w + inc.w));
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
-
-            logDebug(`Alvo ${coord} | Local: ${localV.w}/${localV.c}/${localV.i} | A caminho: ${inc.w}/${inc.c}/${inc.i} | Défice: ${defW}W ${defC}C ${defI}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
@@ -319,7 +350,7 @@ javascript:(function() {
         }
 
         if (transfers.length === 0) {
-            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio necessário ou as aldeias do grupo não têm recursos/mercadores suficientes. Carrega em 'Ver Debug' para analisar.</td></tr>`);
+            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio gerado. Abre o debug para ver os mercadores/recursos das dadoras.</td></tr>`);
             $("#ntSummaryText").text("Nenhum envio gerado.");
             $("#debugLog").show();
         } else {
