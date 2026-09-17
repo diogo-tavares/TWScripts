@@ -1,5 +1,5 @@
 javascript:(function() {
-    const SCRIPT_VERSION = "v17.0 - Sophie Inline Frame & Ultra-Fast Enter";
+    const SCRIPT_VERSION = "v17.1 - Sophie Inline & +10k Buffer Margin";
 
     const cssSophieTheme = `
     <style id="sophieNTStyles">
@@ -113,6 +113,7 @@ javascript:(function() {
     $("head").append(cssSophieTheme);
 
     const CUSTO_NOBRE = { w: 40000, c: 50000, i: 50000 };
+    const BUFFER_EXTRA = 10000; // Margem para gestor de conta / tropas
 
     let frameHtml = `
     <div id="sophieNTContainer">
@@ -178,7 +179,6 @@ javascript:(function() {
         </div>
     </div>`;
 
-    // Injeção limpa no pergaminho principal do Tribos
     if ($("#content_value").length) {
         $("#content_value").prepend(frameHtml);
     } else {
@@ -354,7 +354,7 @@ javascript:(function() {
             });
         }
 
-        // 5. Cálculo dos Défices
+        // 5. Cálculo dos Défices com Buffer de Segurança (+10k por recurso se faltar >= 1 nobre)
         let targets = [];
         let grandTotalW = 0, grandTotalC = 0, grandTotalI = 0;
 
@@ -365,13 +365,27 @@ javascript:(function() {
             let totalNobles = localV.snobs;
 
             let neededNobles = Math.max(0, targetNobles - totalNobles);
-            let totalReqW = neededNobles * CUSTO_NOBRE.w;
-            let totalReqC = neededNobles * CUSTO_NOBRE.c;
-            let totalReqI = neededNobles * CUSTO_NOBRE.i;
 
-            let defW = Math.max(0, totalReqW - (localV.w + inc.w));
-            let defC = Math.max(0, totalReqC - (localV.c + inc.c));
-            let defI = Math.max(0, totalReqI - (localV.i + inc.i));
+            let defW = 0, defC = 0, defI = 0;
+
+            if (neededNobles > 0) {
+                let totalReqW = neededNobles * CUSTO_NOBRE.w;
+                let totalReqC = neededNobles * CUSTO_NOBRE.c;
+                let totalReqI = neededNobles * CUSTO_NOBRE.i;
+
+                let rawDefW = Math.max(0, totalReqW - (localV.w + inc.w));
+                let rawDefC = Math.max(0, totalReqC - (localV.c + inc.c));
+                let rawDefI = Math.max(0, totalReqI - (localV.i + inc.i));
+
+                // Se houver qualquer défice, soma a margem de segurança de +10k
+                defW = rawDefW > 0 ? (rawDefW + BUFFER_EXTRA) : 0;
+                defC = rawDefC > 0 ? (rawDefC + BUFFER_EXTRA) : 0;
+                defI = rawDefI > 0 ? (rawDefI + BUFFER_EXTRA) : 0;
+
+                logDebug(`Alvo ${coord} (Faltam ${neededNobles} nobres): Défice c/ Buffer -> +${defW.toLocaleString()}W | +${defC.toLocaleString()}C | +${defI.toLocaleString()}I`);
+            } else {
+                logDebug(`Alvo ${coord} já tem ${totalNobles}/${targetNobles} nobres. Sem envios.`);
+            }
 
             grandTotalW += defW;
             grandTotalC += defC;
@@ -489,7 +503,6 @@ javascript:(function() {
 
             updateCounter();
 
-            // DISPARO OTIMISTA E INSTANTÂNEO (IGUAL À SOPHIE)
             $(document).off("click keydown", ".send-direct-btn").on("click", ".send-direct-btn", function(e) {
                 e.preventDefault();
                 let btn = $(this);
@@ -508,11 +521,9 @@ javascript:(function() {
 
                 let srcId = btn.data("src");
 
-                // Remove a linha do DOM imediatamente e passa o foco à próxima
                 rowElement.remove();
                 updateCounter();
 
-                // Envia a requisição em background sem travar a interface
                 $.post(`/game.php?village=${srcId}&screen=market&mode=send&action=send`, postData);
             });
         }
