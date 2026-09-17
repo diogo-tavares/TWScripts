@@ -1,66 +1,109 @@
 javascript:(function() {
-    const SCRIPT_VERSION = "v14.0 - Direct Village Market Fetch";
+    const SCRIPT_VERSION = "v15.0 - Sophie Theme & Isolated Incomings";
 
-    const cssSophie = `
+    const cssSophieTheme = `
     <style>
         #sophieNTModal {
             position: fixed;
-            top: 20px;
+            top: 25px;
             left: 50%;
             transform: translateX(-50%);
-            width: 940px;
+            width: 900px;
             max-height: 88vh;
-            background-color: #F4E4BC;
-            border: 3px solid #803000;
+            background-color: #2b303a;
+            border: 2px solid #1a1c23;
             z-index: 999999;
             box-shadow: 0 0 25px rgba(0,0,0,0.85);
             font-family: Verdana, Arial, sans-serif;
             font-size: 11px;
-            color: #000;
+            color: #e0e0e0;
             overflow-y: auto;
             border-radius: 4px;
         }
-        .sophHeader {
-            background-color: #c6a768;
+        .sophieTopBar {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            background: #1e222b;
+            border-bottom: 1px solid #3c4250;
+            padding: 8px 12px;
+            font-size: 11px;
+            gap: 6px;
+        }
+        .sophieTopBar div {
+            color: #fff;
             font-weight: bold;
-            color: #803000;
-            padding: 10px;
-            font-size: 14px;
+        }
+        .sophieTitleBar {
+            background-color: #242831;
+            padding: 8px 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2px solid #803000;
+            border-bottom: 1px solid #3c4250;
         }
-        .sophRowA { background-color: #F4E4BC; }
-        .sophRowB { background-color: #fff5da; }
-        .sophTable { width: 100%; border-collapse: collapse; margin-top: 5px; }
-        .sophTable th { background-color: #c6a768; color: #803000; padding: 6px; border: 1px solid #803000; }
-        .sophTable td { padding: 5px; text-align: center; border: 1px solid #d2b48c; }
-        .btnSophie {
+        .sophieTitleBar span.title {
+            color: #fff;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .sophieTable {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .sophieTable th {
+            background-color: #1e222b;
+            color: #fff;
+            padding: 7px;
+            font-size: 11px;
+            font-weight: bold;
+            border: 1px solid #3c4250;
+            text-align: center;
+        }
+        .sophieTable td {
+            padding: 6px;
+            border: 1px solid #3c4250;
+            text-align: center;
+            font-size: 11px;
+            color: #ffffff;
+        }
+        .rowDarkA { background-color: #2b303a; }
+        .rowDarkB { background-color: #242831; }
+        .rowDarkA:hover, .rowDarkB:hover { background-color: #383f4c; }
+        .coordLink {
+            color: #4da6ff !important;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .btnSophieDark {
             background: linear-gradient(to bottom, #947a62 0%,#7b5c3d 22%,#6c4824 30%,#6c4824 100%);
-            color: white !important;
-            border: 1px solid #3b240f;
-            padding: 5px 12px;
+            color: #ffffff !important;
+            border: 1px solid #201205;
+            padding: 3px 10px;
             cursor: pointer;
             font-weight: bold;
-            border-radius: 3px;
+            font-size: 11px;
+            border-radius: 2px;
         }
-        .btnSophie:hover { background: linear-gradient(to bottom, #b69471 0%,#9f764d 22%,#8f6133 30%,#6c4d2d 100%); }
-        .btnSophie:disabled { background: #888; cursor: not-allowed; }
-        .resWood { color: #804000; font-weight: bold; }
-        .resStone { color: #a84000; font-weight: bold; }
-        .resIron { color: #505050; font-weight: bold; }
-        .debugBox {
-            margin-top: 10px;
-            padding: 8px;
+        .btnSophieDark:hover { background: linear-gradient(to bottom, #a68a70 0%,#8d6b47 22%,#7c532b 30%,#7c532b 100%); }
+        .btnSophieDark:disabled { background: #555; cursor: not-allowed; border-color: #333; }
+        .resIconText {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            color: #fff;
+            font-weight: bold;
+        }
+        .debugConsole {
             background: #111;
             color: #0f0;
             font-family: monospace;
             font-size: 10px;
-            max-height: 260px;
+            padding: 8px;
+            max-height: 220px;
             overflow-y: auto;
             text-align: left;
-            border-radius: 3px;
+            border-top: 1px solid #3c4250;
         }
     </style>`;
 
@@ -69,54 +112,62 @@ javascript:(function() {
     const CUSTO_NOBRE = { w: 40000, c: 50000, i: 50000 };
 
     let modalHtml = `
-    ${cssSophie}
+    ${cssSophieTheme}
     <div id="sophieNTModal">
-        <div class="sophHeader">
-            <span>⚔️ NT Resource Balancer (${SCRIPT_VERSION})</span>
-            <span onclick="$('#sophieNTModal').remove();" style="cursor:pointer;font-size:16px;">✖</span>
+        <div class="sophieTitleBar">
+            <span class="title">⚔️ Warehouse Balancer - Fazer NTs (${SCRIPT_VERSION})</span>
+            <span onclick="$('#sophieNTModal').remove();" style="cursor:pointer;font-size:16px;color:#fff;">✖</span>
         </div>
-        <div id="ntBody" style="padding: 12px;">
+        
+        <div id="ntBody" style="padding: 10px;">
             <div id="ntConfigStep">
-                <p><b>1. Aldeias Alvo onde queres fazer NT:</b></p>
-                <textarea id="targetCoordsInput" rows="2" style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px;">354|615 356|615 361|623 363|623 351|619 361|622 352|631</textarea>
+                <p style="color:#ddd; margin: 4px 0 6px 0;"><b>Aldeias Alvo (onde queres NTs):</b></p>
+                <textarea id="targetCoordsInput" rows="2" style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px; background:#1e222b; color:#fff; border:1px solid #3c4250;">354|615 356|615 361|623 363|623 351|619 361|622 352|631</textarea>
                 
-                <p style="margin-top: 8px;"><b>2. Aldeias Dadoras (de onde retirar recursos) [Deixa vazio se quiseres usar todas do ecrã]:</b></p>
-                <textarea id="donorCoordsInput" rows="3" placeholder="Ex: 340|600 341|600 342|600..." style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px;"></textarea>
+                <p style="color:#ddd; margin: 8px 0 6px 0;"><b>Aldeias Dadoras [Vazio = todas do grupo atual]:</b></p>
+                <textarea id="donorCoordsInput" rows="3" placeholder="Ex: 340|600 341|600..." style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px; background:#1e222b; color:#fff; border:1px solid #3c4250;"></textarea>
 
                 <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between;">
                     <div>
-                        <label><b>Nobres pretendidos por aldeia: </b></label>
-                        <input type="number" id="noblesCountInput" value="4" min="1" max="10" style="width: 45px; text-align: center;">
+                        <label style="color:#ddd;"><b>Nobres pretendidos: </b></label>
+                        <input type="number" id="noblesCountInput" value="4" min="1" max="10" style="width: 45px; text-align: center; background:#1e222b; color:#fff; border:1px solid #3c4250;">
                     </div>
-                    <button class="btnSophie" id="btnRunOptimizer">Carregar e Calcular Envios</button>
+                    <button class="btnSophieDark" id="btnRunOptimizer">Carregar e Calcular Envios</button>
                 </div>
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A contactar os mercados de cada alvo individualmente...</b></p>
-                <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
+                <p style="font-size:13px; color:#fff;"><b>A contactar os mercados e a auditar transportes a chegar...</b></p>
+                <div id="ntLoadingStatus" style="font-size:12px; color:#4da6ff; margin-top:5px;"></div>
             </div>
 
             <div id="ntResultStep" style="display:none;">
-                <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 8px;">
-                    <span id="ntSummaryText" style="font-weight:bold; font-size:12px;"></span>
+                <div class="sophieTopBar" id="ntStatsBar">
+                    <div id="statTotalWood">Total Wood: 0</div>
+                    <div id="statTotalClay">Total Clay: 0</div>
+                    <div id="statTotalIron">Total Iron: 0</div>
+                </div>
+
+                <div style="display:flex; justify-content: space-between; align-items:center; padding: 6px 0;">
+                    <span id="ntSummaryText" style="font-weight:bold; font-size:11px; color:#fff;"></span>
                     <div>
-                        <button class="btnSophie" id="btnToggleDebug" style="background:#555;margin-right:5px;">Ver Debug</button>
-                        <button class="btnSophie" id="btnBackConfig">Voltar</button>
+                        <button class="btnSophieDark" id="btnToggleDebug" style="background:#444;margin-right:5px;">Debug</button>
+                        <button class="btnSophieDark" id="btnBackConfig">Voltar</button>
                     </div>
                 </div>
-                <div id="debugLog" class="debugBox" style="display:none;"></div>
-                <table class="sophTable">
+
+                <div id="debugLog" class="debugConsole" style="display:none;"></div>
+
+                <table class="sophieTable">
                     <thead>
                         <tr>
-                            <th>Origem</th>
-                            <th>Destino</th>
-                            <th>Dist.</th>
-                            <th>Madeira</th>
-                            <th>Argila</th>
-                            <th>Ferro</th>
-                            <th>Mercs</th>
-                            <th>Ação</th>
+                            <th>Source village</th>
+                            <th>Target village</th>
+                            <th>Distance</th>
+                            <th>Wood</th>
+                            <th>Clay</th>
+                            <th>Iron</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="ntTableBody"></tbody>
@@ -143,7 +194,7 @@ javascript:(function() {
 
     $("#btnRunOptimizer").click(async function() {
         debugLines = [];
-        logDebug(`>>> SCRIPT INICIADO: ${SCRIPT_VERSION} <<<`);
+        logDebug(`>>> INICIADO: ${SCRIPT_VERSION} <<<`);
 
         let rawTargets = $("#targetCoordsInput").val().match(/\d{3}\|\d{3}/g);
         if (!rawTargets || rawTargets.length === 0) {
@@ -161,8 +212,8 @@ javascript:(function() {
 
         let accountVillages = {};
 
-        // 1. Mapear Produção e Ícones de Nobre em Treino
-        $("#ntLoadingStatus").text("A ler tabela de produção e recrutamentos...");
+        // 1. Mapear Produção e Nobres em Treino
+        $("#ntLoadingStatus").text("A carregar armazéns e recrutamento...");
         try {
             let prodHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod`);
             let docProd = $(prodHtml);
@@ -178,6 +229,7 @@ javascript:(function() {
 
                 if (coordM && vid) {
                     let coord = coordM[1];
+                    let villageName = link.text().trim();
                     let [x, y] = coord.split("|").map(Number);
                     let w = parseInt(r.find(".wood").text().replace(/\D/g, '')) || 0;
                     let c = parseInt(r.find(".stone").text().replace(/\D/g, '')) || 0;
@@ -193,6 +245,7 @@ javascript:(function() {
 
                     accountVillages[coord] = {
                         id: vid,
+                        name: villageName,
                         coord: coord,
                         x: x,
                         y: y,
@@ -204,17 +257,17 @@ javascript:(function() {
                     };
 
                     if (snobsInTraining > 0 && uniqueTargets.includes(coord)) {
-                        logDebug(`Alvo ${coord}: +${snobsInTraining} nobre(s) em treino detetado(s).`);
+                        logDebug(`Alvo ${coord}: +${snobsInTraining} nobre(s) em treino.`);
                     }
                 }
             });
-            logDebug(`Aldeias mapeadas na produção: ${Object.keys(accountVillages).length}`);
+            logDebug(`Total de aldeias no ecrã: ${Object.keys(accountVillages).length}`);
         } catch(e) {
-            logDebug(`Erro ao ler produção: ${e}`);
+            logDebug(`Erro na leitura de produção: ${e}`);
         }
 
         // 2. Mapear Nobres Prontos
-        $("#ntLoadingStatus").text("A somar tropas concluídas...");
+        $("#ntLoadingStatus").text("A contabilizar nobres prontos...");
         try {
             let unitsHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=units&type=complete`);
             let docUnits = $(unitsHtml);
@@ -239,14 +292,13 @@ javascript:(function() {
                         }
                     }
                 });
-                logDebug(`Nobres prontos somados pela coluna ${snobColIndex}.`);
             }
         } catch(e) {
             logDebug(`Aviso ao ler tropas: ${e}`);
         }
 
-        // 3. CONSULTA DIRETA AO MERCADO DE CADA ALDEIA ALVO
-        $("#ntLoadingStatus").text("A consultar o mercado direto de cada alvo...");
+        // 3. CONSULTA DIRETA AO MERCADO - ISOLAMENTO ESTRITO DE "A CHEGAR"
+        $("#ntLoadingStatus").text("A extrair dados de transportes a chegar...");
         let incomingRes = {};
 
         for (let coord of uniqueTargets) {
@@ -258,29 +310,33 @@ javascript:(function() {
                 let mHtml = await $.get(`/game.php?village=${targetV.id}&screen=market`);
                 let docM = $(mHtml);
 
-                // No ecrã do mercado da própria aldeia, os transportes a chegar estão nas tabelas vis com a class .wood/.stone/.iron
-                docM.find("table.vis").each(function() {
-                    let t = $(this);
-                    let header = t.find("th").first().text().toLowerCase();
-                    if (header.includes("chegada") || header.includes("transporte") || header.includes("mercador") || t.text().includes("Transportes a caminho") || t.text().includes("A chegar")) {
-                        t.find("tr").each(function() {
-                            let r = $(this);
-                            r.find("span.wood, .icon.header.wood").each(function() {
-                                incomingRes[coord].w += parseInt($(this).parent().text().replace(/\D/g, '')) || 0;
-                            });
-                            r.find("span.stone, .icon.header.stone").each(function() {
-                                incomingRes[coord].c += parseInt($(this).parent().text().replace(/\D/g, '')) || 0;
-                            });
-                            r.find("span.iron, .icon.header.iron").each(function() {
-                                incomingRes[coord].i += parseInt($(this).parent().text().replace(/\D/g, '')) || 0;
-                            });
+                docM.find("table.vis tr").each(function() {
+                    let text = $(this).text();
+                    if (text.includes("A chegar:") || text.includes("Incoming:")) {
+                        let rowHtml = $(this).html();
+
+                        // Truncar o HTML para ignorar tudo a partir de "De saída" ou "Outgoing"
+                        let incomingPart = rowHtml.split(/De saída|Outgoing/i)[0];
+                        let incomingBlock = $("<div>" + incomingPart + "</div>");
+
+                        incomingBlock.find("span.icon.header.wood, img[src*='wood'], .wood").each(function() {
+                            let val = parseInt($(this).parent().text().replace(/\D/g, '')) || 0;
+                            if (val < 1000000) incomingRes[coord].w += val;
+                        });
+                        incomingBlock.find("span.icon.header.stone, img[src*='stone'], .stone").each(function() {
+                            let val = parseInt($(this).parent().text().replace(/\D/g, '')) || 0;
+                            if (val < 1000000) incomingRes[coord].c += val;
+                        });
+                        incomingBlock.find("span.icon.header.iron, img[src*='iron'], .iron").each(function() {
+                            let val = parseInt($(this).parent().text().replace(/\D/g, '')) || 0;
+                            if (val < 1000000) incomingRes[coord].i += val;
                         });
                     }
                 });
 
-                logDebug(`Mercado direto de ${coord}: +${incomingRes[coord].w.toLocaleString()}W | +${incomingRes[coord].c.toLocaleString()}C | +${incomingRes[coord].i.toLocaleString()}I a chegar.`);
+                logDebug(`Mercado ${coord} (Isolado): +${incomingRes[coord].w.toLocaleString()}W | +${incomingRes[coord].c.toLocaleString()}C | +${incomingRes[coord].i.toLocaleString()}I`);
             } catch(err) {
-                logDebug(`Erro ao ler mercado direto de ${coord}: ${err}`);
+                logDebug(`Erro no mercado de ${coord}: ${err}`);
             }
         }
 
@@ -299,13 +355,14 @@ javascript:(function() {
                 }
             });
         }
-        logDebug(`Total de dadoras disponíveis: ${groupVillages.length}`);
 
-        // 5. Cálculo dos Défices com Recursos Confirmados
+        // 5. Cálculo dos Défices
         let targets = [];
+        let grandTotalW = 0, grandTotalC = 0, grandTotalI = 0;
+
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
-            let localV = accountVillages[coord] || { id: null, w: 0, c: 0, i: 0, snobs: 0 };
+            let localV = accountVillages[coord] || { id: null, name: coord, w: 0, c: 0, i: 0, snobs: 0 };
             let inc = incomingRes[coord] || { w: 0, c: 0, i: 0 };
             let totalNobles = localV.snobs;
 
@@ -318,16 +375,18 @@ javascript:(function() {
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
 
-            logDebug(`--- ALVO: ${coord} (ID: ${localV.id}) ---`);
-            logDebug(`  Nobres: [${totalNobles}/${targetNobles}] (Faltam: ${neededNobles})`);
-            logDebug(`  Armazém local: ${localV.w.toLocaleString()}W | ${localV.c.toLocaleString()}C | ${localV.i.toLocaleString()}I`);
-            logDebug(`  A caminho:     ${inc.w.toLocaleString()}W | ${inc.c.toLocaleString()}C | ${inc.i.toLocaleString()}I`);
-            logDebug(`  Total útil:    ${(localV.w + inc.w).toLocaleString()}W | ${(localV.c + inc.c).toLocaleString()}C | ${(localV.i + inc.i).toLocaleString()}I`);
-            logDebug(`  Défice final:  ${defW.toLocaleString()}W | ${defC.toLocaleString()}C | ${defI.toLocaleString()}I`);
+            grandTotalW += defW;
+            grandTotalC += defC;
+            grandTotalI += defI;
+
+            logDebug(`--- ALVO: ${coord} ---`);
+            logDebug(`  Nobres: [${totalNobles}/${targetNobles}]`);
+            logDebug(`  Défice a pedir: ${defW.toLocaleString()}W | ${defC.toLocaleString()}C | ${defI.toLocaleString()}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
                     id: localV.id,
+                    name: localV.name,
                     coord: coord,
                     x: x,
                     y: y,
@@ -335,6 +394,10 @@ javascript:(function() {
                 });
             }
         });
+
+        $("#statTotalWood").html(`Total wood: <span style="color:#fff;">${grandTotalW.toLocaleString()}</span>`);
+        $("#statTotalClay").html(`Total clay: <span style="color:#fff;">${grandTotalC.toLocaleString()}</span>`);
+        $("#statTotalIron").html(`Total iron: <span style="color:#fff;">${grandTotalI.toLocaleString()}</span>`);
 
         // 6. Distribuição dos Envios
         let transfers = [];
@@ -359,12 +422,14 @@ javascript:(function() {
 
                 transfers.push({
                     srcId: src.id,
+                    srcName: src.name,
                     srcCoord: src.coord,
                     targetId: t.id,
+                    targetName: t.name,
                     targetCoord: t.coord,
                     targetX: t.x,
                     targetY: t.y,
-                    dist: Math.hypot(src.x - t.x, src.y - t.y).toFixed(1),
+                    dist: Math.round(Math.hypot(src.x - t.x, src.y - t.y)),
                     w: sendW,
                     c: sendC,
                     i: sendI,
@@ -388,32 +453,35 @@ javascript:(function() {
         function updateCounter() {
             let restantes = $("#ntTableBody tr.task-row").length;
             if (restantes === 0) {
-                $("#ntSummaryText").html("<span style='color:green;'>✔️ Todas as ordens foram concluídas!</span>");
-                tbody.html("<tr><td colspan='8' style='padding: 15px; font-weight: bold; color: green;'>Plano de envios concluído com sucesso.</td></tr>");
+                $("#ntSummaryText").html("<span style='color:#00ff88;'>✔️ Todas as ordens foram concluídas!</span>");
+                tbody.html("<tr><td colspan='7' style='padding: 20px; font-weight: bold; color: #00ff88; text-align:center;'>Todos os transportes para nobres foram despachados.</td></tr>");
             } else {
-                $("#ntSummaryText").text(`Tarefas pendentes: ${restantes}`);
+                $("#ntSummaryText").text(`Remaining orders: ${restantes}`);
             }
         }
 
+        const iconW = '<span class="icon header wood"> </span>';
+        const iconC = '<span class="icon header stone"> </span>';
+        const iconI = '<span class="icon header iron"> </span>';
+
         if (transfers.length === 0) {
-            tbody.append(`<tr><td colspan='8' style='padding: 12px; color: #a00; font-weight: bold;'>Nenhum envio necessário. As aldeias já cumprem a meta de nobres ou recursos.</td></tr>`);
-            $("#ntSummaryText").text("Nenhum envio gerado.");
+            tbody.append(`<tr><td colspan='7' style='padding: 15px; color: #ff8888; font-weight: bold;'>Nenhum envio necessário. As aldeias já dispõem de nobres ou recursos em trânsito suficientes.</td></tr>`);
+            $("#ntSummaryText").text("0 ordens pendentes.");
             $("#debugLog").show();
         } else {
             transfers.forEach((tr, index) => {
-                let rowClass = index % 2 === 0 ? "sophRowA" : "sophRowB";
+                let rowClass = index % 2 === 0 ? "rowDarkA" : "rowDarkB";
                 let rowId = `task_row_${index}`;
 
                 tbody.append(`
                     <tr id="${rowId}" class="task-row ${rowClass}">
-                        <td>${tr.srcCoord}</td>
-                        <td><b>${tr.targetCoord}</b></td>
-                        <td>${tr.dist}</td>
-                        <td class="resWood">${tr.w.toLocaleString()}</td>
-                        <td class="resStone">${tr.c.toLocaleString()}</td>
-                        <td class="resIron">${tr.i.toLocaleString()}</td>
-                        <td>${tr.merc}</td>
-                        <td><button class="btnSophie send-direct-btn" data-row="${rowId}" data-src="${tr.srcId}" data-tid="${tr.targetId}" data-tx="${tr.targetX}" data-ty="${tr.targetY}" data-w="${tr.w}" data-c="${tr.c}" data-i="${tr.i}">Enviar</button></td>
+                        <td><a href="/game.php?village=${tr.srcId}&screen=overview" target="_blank" class="coordLink">${tr.srcName}</a></td>
+                        <td><a href="/game.php?village=${tr.targetId}&screen=overview" target="_blank" class="coordLink">${tr.targetName}</a></td>
+                        <td><b>${tr.dist}</b></td>
+                        <td><span class="resIconText">${tr.w.toLocaleString()} ${iconW}</span></td>
+                        <td><span class="resIconText">${tr.c.toLocaleString()} ${iconC}</span></td>
+                        <td><span class="resIconText">${tr.i.toLocaleString()} ${iconI}</span></td>
+                        <td><button class="btnSophieDark send-direct-btn" data-row="${rowId}" data-src="${tr.srcId}" data-tid="${tr.targetId}" data-tx="${tr.targetX}" data-ty="${tr.targetY}" data-w="${tr.w}" data-c="${tr.c}" data-i="${tr.i}">Send resources</button></td>
                     </tr>
                 `);
             });
@@ -425,7 +493,7 @@ javascript:(function() {
                 let rowId = btn.data("row");
                 let rowElement = $(`#${rowId}`);
 
-                btn.prop("disabled", true).text("A enviar...");
+                btn.prop("disabled", true).text("Sending...");
 
                 let postData = {
                     target_id: btn.data("tid"),
@@ -448,10 +516,10 @@ javascript:(function() {
                             let msg = errMatch ? $(errMatch[0]).text().trim() : "Recusado pelo jogo.";
                             logDebug(`FALHA no envio: ${msg}`);
                             UI.ErrorMessage(msg);
-                            btn.prop("disabled", false).text("Enviar");
+                            btn.prop("disabled", false).text("Send resources");
                         } else {
                             UI.SuccessMessage("Recursos enviados com sucesso!");
-                            rowElement.fadeOut(200, function() {
+                            rowElement.fadeOut(150, function() {
                                 $(this).remove();
                                 updateCounter();
                             });
@@ -460,7 +528,7 @@ javascript:(function() {
                     error: function(xhr, status, err) {
                         logDebug(`HTTP ERROR (${xhr.status}): ${err}`);
                         UI.ErrorMessage(`Erro HTTP ${xhr.status}: Tenta novamente.`);
-                        btn.prop("disabled", false).text("Enviar");
+                        btn.prop("disabled", false).text("Send resources");
                     }
                 });
             });
