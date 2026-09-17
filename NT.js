@@ -1,5 +1,5 @@
 javascript:(function() {
-    const SCRIPT_VERSION = "v13.5 - Detailed Incoming Resources Debug";
+    const SCRIPT_VERSION = "v13.6 - Clean Trader Number Parser";
 
     const cssSophie = `
     <style>
@@ -245,35 +245,47 @@ javascript:(function() {
             logDebug(`Aviso ao ler tropas: ${e}`);
         }
 
-        // 3. Parser de Transportes Individuais (mode=trader)
-        $("#ntLoadingStatus").text("A computar transportes em trânsito por tipo de recurso...");
+        // 3. Parser Rigoroso de Transportes a Entrar (mode=trader)
+        $("#ntLoadingStatus").text("A computar transportes em trânsito...");
         let incomingRes = {};
         try {
             let traderHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=trader`);
             let docTrader = $(traderHtml);
 
+            // Procurar especificamente as linhas que têm a seta de transporte a entrar (seta castanha para a esquerda)
             docTrader.find("table.vis tr").each(function() {
                 let r = $(this);
-                let cells = r.find("td");
-                if (cells.length < 5) return;
-
                 let textRow = r.text();
+                
+                // Tem de ter coordenadas e pelo menos uma imagem de madeira/argila/ferro na última célula
                 let coordMatches = textRow.match(/\d{3}\|\d{3}/g);
-                if (!coordMatches) return;
+                if (!coordMatches || coordMatches.length < 1) return;
 
+                let lastTd = r.find("td").last();
+                let isWood = lastTd.find("span.icon.header.wood, img[src*='wood']").length > 0;
+                let isStone = lastTd.find("span.icon.header.stone, img[src*='stone']").length > 0;
+                let isIron = lastTd.find("span.icon.header.iron, img[src*='iron']").length > 0;
+
+                if (!isWood && !isStone && !isIron) return;
+
+                // Destino é a coordenada da coluna 'Aldeia' (a última coordenada da linha)
                 let destCoord = coordMatches[coordMatches.length - 1];
                 if (!incomingRes[destCoord]) incomingRes[destCoord] = { w: 0, c: 0, i: 0 };
 
-                let lastCell = cells.last();
-                let val = parseInt(lastCell.text().replace(/\D/g, '')) || 0;
+                // Extrair estritamente o valor numérico apenas do último TD (onde está o ícone do recurso)
+                // Ex: "40.000" ou "40 000" -> 40000
+                let rawResText = lastTd.text().trim().replace(/\./g, '').replace(/\s/g, '');
+                let numMatch = rawResText.match(/\d+/);
+                let val = numMatch ? parseInt(numMatch[0]) : 0;
 
-                if (lastCell.find("span.icon.header.wood, img[src*='wood']").length || lastCell.find(".wood").length) {
-                    incomingRes[destCoord].w += val;
-                } else if (lastCell.find("span.icon.header.stone, img[src*='stone']").length || lastCell.find(".stone").length) {
-                    incomingRes[destCoord].c += val;
-                } else if (lastCell.find("span.icon.header.iron, img[src*='iron']").length || lastCell.find(".iron").length) {
-                    incomingRes[destCoord].i += val;
+                // Sanity check: um transporte de mercado tem no máximo o total de mercadores * 1000 (raramente passa de 500k por linha)
+                if (val > 1000000) {
+                    val = 0; // Descarta contaminações com carimbos de data/hora
                 }
+
+                if (isWood) incomingRes[destCoord].w += val;
+                if (isStone) incomingRes[destCoord].c += val;
+                if (isIron) incomingRes[destCoord].i += val;
             });
         } catch(e) {
             logDebug(`Aviso ao ler transportes: ${e}`);
@@ -296,7 +308,7 @@ javascript:(function() {
         }
         logDebug(`Total de dadoras disponíveis: ${groupVillages.length}`);
 
-        // 5. Cálculo dos Défices com Auditoria Detalhada
+        // 5. Cálculo dos Défices com Dados Limpos
         let targets = [];
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
@@ -313,7 +325,6 @@ javascript:(function() {
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
 
-            // Relatório detalhado para cada aldeia alvo
             logDebug(`--- ALVO: ${coord} (ID: ${localV.id}) ---`);
             logDebug(`  Nobres: [${totalNobles}/${targetNobles}] (Faltam: ${neededNobles})`);
             logDebug(`  Armazém local: ${localV.w.toLocaleString()}W | ${localV.c.toLocaleString()}C | ${localV.i.toLocaleString()}I`);
