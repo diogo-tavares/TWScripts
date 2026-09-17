@@ -1,5 +1,5 @@
 javascript:(function() {
-    const SCRIPT_VERSION = "v13.1 - Dual List & Complete Snob Sync";
+    const SCRIPT_VERSION = "v13.2 - Snob Academy Deep Sync";
 
     const cssSophie = `
     <style>
@@ -57,7 +57,7 @@ javascript:(function() {
             color: #0f0;
             font-family: monospace;
             font-size: 10px;
-            max-height: 220px;
+            max-height: 240px;
             overflow-y: auto;
             text-align: left;
             border-radius: 3px;
@@ -93,7 +93,7 @@ javascript:(function() {
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A mapear nobres (parados + fora + treino) e recursos sem alterar o teu grupo...</b></p>
+                <p style="font-size:13px;"><b>A mapear nobres (parados + fora + academia) e recursos...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
@@ -161,7 +161,7 @@ javascript:(function() {
 
         let accountVillages = {};
 
-        // 1. Mapear Recursos e Mercadores sem group=0
+        // 1. Mapear Produção Geral
         $("#ntLoadingStatus").text("A recolher recursos das aldeias...");
         try {
             let prodHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod`);
@@ -207,7 +207,7 @@ javascript:(function() {
             logDebug(`Erro ao ler produção: ${e}`);
         }
 
-        // 2. Extração de Nobres (Parados + Fora) via mode=units&type=complete
+        // 2. Extração de Nobres (Parados + Fora)
         $("#ntLoadingStatus").text("A ler tropas completas (nobres dentro e fora)...");
         try {
             let unitsHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=units&type=complete`);
@@ -233,36 +233,46 @@ javascript:(function() {
                         }
                     }
                 });
-                logDebug(`Nobres (aldeia + fora) processados pela coluna ${snobColIndex}`);
+                logDebug(`Nobres existentes (aldeia + fora) lidos pela coluna ${snobColIndex}`);
             }
         } catch(e) {
             logDebug(`Aviso ao ler tropas: ${e}`);
         }
 
-        // 3. Extração de Nobres em Treino
-        $("#ntLoadingStatus").text("A ler nobres em recrutamento...");
-        try {
-            let trainHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=train&mode=mass`);
-            let docTrain = $(trainHtml);
+        // 3. Inspeção Específica da Academia para cada Alvo (Recrutamento em curso)
+        $("#ntLoadingStatus").text("A verificar fila de treino na Academia dos alvos...");
+        for (let coord of uniqueTargets) {
+            let v = accountVillages[coord];
+            if (v && v.id) {
+                try {
+                    let snobHtml = await $.get(`/game.php?village=${v.id}&screen=snob`);
+                    let docSnob = $(snobHtml);
 
-            docTrain.find("tr[id^='village_']").each(function() {
-                let r = $(this);
-                let link = r.find(".quickedit-vn");
-                let coordM = link.text().match(/(\d{3}\|\d{3})/);
-                if (coordM && accountVillages[coordM[1]]) {
-                    let inQueue = 0;
-                    r.find("a[href*='action=cancel']").each(function() {
-                        let rowText = $(this).closest("tr").text();
-                        if (rowText.includes("Nobre") || $(this).prev().attr("src")?.includes("snob")) {
-                            inQueue++;
-                        }
-                    });
-                    accountVillages[coordM[1]].snobs += inQueue;
+                    let inProduction = 0;
+
+                    // Procura ordens ativas de cancelamento
+                    let cancelLinks = docSnob.find("a[href*='action=cancel']").length;
+                    if (cancelLinks > 0) {
+                        inProduction += cancelLinks;
+                    } else {
+                        // Procura texto de produção (ex: "Nobres em produção: X")
+                        docSnob.find("table.vis tr").each(function() {
+                            let txt = $(this).text();
+                            if (txt.includes("em produção") || txt.includes("em recrutamento")) {
+                                let m = txt.match(/(\d+)/);
+                                if (m) inProduction = parseInt(m[1]) || 0;
+                            }
+                        });
+                    }
+
+                    if (inProduction > 0) {
+                        v.snobs += inProduction;
+                        logDebug(`Alvo ${coord}: +${inProduction} nobre(s) detetado(s) em treino na Academia.`);
+                    }
+                } catch(e) {
+                    logDebug(`Aviso ao inspecionar academia de ${coord}: ${e}`);
                 }
-            });
-            logDebug("Nobres em fila de espera adicionados à contagem.");
-        } catch(e) {
-            logDebug(`Aviso ao ler fila de treino: ${e}`);
+            }
         }
 
         // 4. Transportes a caminho via mode=trader
@@ -288,7 +298,7 @@ javascript:(function() {
             logDebug("Aviso ao ler transportes.");
         }
 
-        // 5. Selecionar Dadoras
+        // 5. Filtrar Dadoras
         let groupVillages = [];
         if (explicitDonors.length > 0) {
             explicitDonors.forEach(coord => {
@@ -303,7 +313,7 @@ javascript:(function() {
                 }
             });
         }
-        logDebug(`Total de dadoras disponíveis para envio: ${groupVillages.length}`);
+        logDebug(`Total de dadoras prontas para envio: ${groupVillages.length}`);
 
         // 6. Cálculo dos Défices
         let targets = [];
@@ -322,7 +332,7 @@ javascript:(function() {
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
 
-            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres (total): [${currentNobles}/${targetNobles}] | Défice: ${defW}W ${defC}C ${defI}I`);
+            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres (Totais): [${currentNobles}/${targetNobles}] | Défice: ${defW}W ${defC}C ${defI}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
