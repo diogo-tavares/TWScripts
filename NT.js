@@ -1,39 +1,24 @@
 javascript:(function() {
-    const SCRIPT_VERSION = "v16.0 - Sophie Native UI & Auto-Focus Enter";
+    const SCRIPT_VERSION = "v17.0 - Sophie Inline Frame & Ultra-Fast Enter";
 
     const cssSophieTheme = `
-    <style>
-        #sophieNTOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.4);
-            z-index: 999998;
-        }
-        #sophieNTModal {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 960px;
-            max-height: 85vh;
-            background-color: #242933;
-            border: 2px solid #14171e;
-            z-index: 999999;
-            box-shadow: 0 0 35px rgba(0,0,0,0.9);
+    <style id="sophieNTStyles">
+        #sophieNTContainer {
+            width: 100%;
+            margin: 10px auto;
+            background-color: #242831;
+            border: 2px solid #1a1c23;
             font-family: Verdana, Arial, sans-serif;
             font-size: 11px;
             color: #e0e0e0;
-            overflow-y: auto;
-            border-radius: 4px;
+            border-radius: 3px;
+            box-sizing: border-box;
         }
         .sophieTopBar {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            background: #171a21;
-            border-bottom: 1px solid #363d4d;
+            background: #181a20;
+            border-bottom: 1px solid #363c48;
             padding: 8px 12px;
             font-size: 11px;
             gap: 8px;
@@ -43,55 +28,52 @@ javascript:(function() {
             font-weight: bold;
         }
         .sophieTitleBar {
-            background-color: #1a1e27;
-            padding: 9px 12px;
+            background-color: #1a1d24;
+            padding: 8px 12px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #363d4d;
+            border-bottom: 1px solid #363c48;
         }
         .sophieTitleBar span.title {
             color: #ffffff;
             font-weight: bold;
-            font-size: 13px;
+            font-size: 12px;
         }
         .sophieTable {
             width: 100%;
             border-collapse: collapse;
         }
         .sophieTable th {
-            background: linear-gradient(to bottom, #d2b36f 0%, #b89851 100%);
+            background-color: #1c1f26;
             color: #ffffff;
-            text-shadow: 1px 1px 1px #000;
             padding: 6px;
             font-size: 11px;
             font-weight: bold;
-            border: 1px solid #202530;
+            border: 1px solid #303642;
             text-align: center;
         }
         .sophieTable td {
-            padding: 5px 6px;
-            border: 1px solid #1a1e27;
+            padding: 4px 6px;
+            border: 1px solid #292e38;
             text-align: center;
             font-size: 11px;
             color: #ffffff;
         }
-        .rowDarkA { background-color: #242933; }
-        .rowDarkB { background-color: #1e232c; }
-        .rowDarkA:hover, .rowDarkB:hover { background-color: #313845; }
+        .rowDarkA { background-color: #242831; }
+        .rowDarkB { background-color: #1e222a; }
+        .rowDarkA:hover, .rowDarkB:hover { background-color: #2e3440; }
         .coordLink {
-            color: #5bb3ff !important;
+            color: #4da6ff !important;
             text-decoration: none;
             font-weight: bold;
         }
-        .coordLink:hover {
-            text-decoration: underline;
-        }
+        .coordLink:hover { text-decoration: underline; }
         .btnSophieDark {
             background: linear-gradient(to bottom, #9b7f64 0%, #7e5c3b 25%, #6e4620 100%);
             color: #ffffff !important;
             border: 1px solid #1f140a;
-            padding: 3px 12px;
+            padding: 2px 10px;
             cursor: pointer;
             font-weight: bold;
             font-size: 11px;
@@ -100,69 +82,65 @@ javascript:(function() {
             outline: none;
         }
         .btnSophieDark:focus {
-            box-shadow: 0 0 5px 2px #5bb3ff;
-            border-color: #5bb3ff;
+            box-shadow: 0 0 4px 2px #4da6ff;
+            border-color: #4da6ff;
         }
         .btnSophieDark:hover {
             background: linear-gradient(to bottom, #ad8f72 0%, #906a44 25%, #805327 100%);
-        }
-        .btnSophieDark:active {
-            background: #503115;
         }
         .resIconText {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 4px;
+            gap: 3px;
             color: #ffffff;
             font-weight: bold;
         }
         .debugConsole {
-            background: #0f1115;
+            background: #0d0f12;
             color: #00ff66;
             font-family: monospace;
             font-size: 10px;
             padding: 8px;
-            max-height: 200px;
+            max-height: 180px;
             overflow-y: auto;
             text-align: left;
-            border-top: 1px solid #363d4d;
+            border-top: 1px solid #363c48;
         }
     </style>`;
 
-    $("#sophieNTModal, #sophieNTOverlay").remove();
+    $("#sophieNTContainer, #sophieNTStyles, #sophieNTOverlay, #sophieNTModal").remove();
+    $("head").append(cssSophieTheme);
 
     const CUSTO_NOBRE = { w: 40000, c: 50000, i: 50000 };
 
-    let modalHtml = `
-    ${cssSophieTheme}
-    <div id="sophieNTOverlay" onclick="$('#sophieNTModal, #sophieNTOverlay').remove();"></div>
-    <div id="sophieNTModal">
+    let frameHtml = `
+    <div id="sophieNTContainer">
         <div class="sophieTitleBar">
             <span class="title">⚔️ Warehouse Balancer - Fazer NTs (${SCRIPT_VERSION})</span>
-            <span onclick="$('#sophieNTModal, #sophieNTOverlay').remove();" style="cursor:pointer;font-size:16px;color:#fff;font-weight:bold;">✖</span>
+            <span onclick="$('#sophieNTContainer').remove();" style="cursor:pointer;font-size:15px;color:#fff;font-weight:bold;">✖</span>
         </div>
         
         <div id="ntBody" style="padding: 10px;">
             <div id="ntConfigStep">
                 <p style="color:#ddd; margin: 4px 0 6px 0;"><b>Aldeias Alvo (onde queres fazer NT):</b></p>
-                <textarea id="targetCoordsInput" rows="2" style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px; background:#171a21; color:#fff; border:1px solid #363d4d;">354|615 356|615 361|623 363|623 351|619 361|622 352|631</textarea>
+                <textarea id="targetCoordsInput" rows="2" style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px; background:#181a20; color:#fff; border:1px solid #363c48;">354|615 356|615 361|623 363|623 351|619 361|622 352|631</textarea>
                 
                 <p style="color:#ddd; margin: 8px 0 6px 0;"><b>Aldeias Dadoras [Vazio = todas do grupo atual]:</b></p>
-                <textarea id="donorCoordsInput" rows="2" placeholder="Ex: 340|600 341|600..." style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px; background:#171a21; color:#fff; border:1px solid #363d4d;"></textarea>
+                <textarea id="donorCoordsInput" rows="2" placeholder="Ex: 340|600 341|600..." style="width: 100%; box-sizing: border-box; font-family: monospace; padding: 6px; background:#181a20; color:#fff; border:1px solid #363c48;"></textarea>
 
                 <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between;">
                     <div>
                         <label style="color:#ddd;"><b>Nobres pretendidos: </b></label>
-                        <input type="number" id="noblesCountInput" value="4" min="1" max="10" style="width: 45px; text-align: center; background:#171a21; color:#fff; border:1px solid #363d4d;">
+                        <input type="number" id="noblesCountInput" value="4" min="1" max="10" style="width: 45px; text-align: center; background:#181a20; color:#fff; border:1px solid #363c48;">
                     </div>
                     <button class="btnSophieDark" id="btnRunOptimizer">Carregar e Calcular Envios</button>
                 </div>
             </div>
 
-            <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px; color:#fff;"><b>A auditar os mercados e a isolar transportes a chegar...</b></p>
-                <div id="ntLoadingStatus" style="font-size:12px; color:#5bb3ff; margin-top:5px;"></div>
+            <div id="ntLoadingStep" style="display:none; text-align:center; padding: 20px;">
+                <p style="font-size:12px; color:#fff;"><b>A contactar os mercados e a auditar transportes a chegar...</b></p>
+                <div id="ntLoadingStatus" style="font-size:11px; color:#4da6ff; margin-top:5px;"></div>
             </div>
 
             <div id="ntResultStep" style="display:none;">
@@ -172,10 +150,10 @@ javascript:(function() {
                     <div id="statTotalIron">Total iron: 0</div>
                 </div>
 
-                <div style="display:flex; justify-content: space-between; align-items:center; padding: 8px 0;">
+                <div style="display:flex; justify-content: space-between; align-items:center; padding: 6px 0;">
                     <span id="ntSummaryText" style="font-weight:bold; font-size:11px; color:#fff;"></span>
                     <div>
-                        <button class="btnSophieDark" id="btnToggleDebug" style="background:#3a404d;margin-right:5px;">Debug</button>
+                        <button class="btnSophieDark" id="btnToggleDebug" style="background:#363c48;margin-right:5px;">Debug</button>
                         <button class="btnSophieDark" id="btnBackConfig">Voltar</button>
                     </div>
                 </div>
@@ -191,7 +169,7 @@ javascript:(function() {
                             <th>Wood</th>
                             <th>Clay</th>
                             <th>Iron</th>
-                            <th>Action</th>
+                            <th style="width: 120px;">Action</th>
                         </tr>
                     </thead>
                     <tbody id="ntTableBody"></tbody>
@@ -200,7 +178,12 @@ javascript:(function() {
         </div>
     </div>`;
 
-    $("body").append(modalHtml);
+    // Injeção limpa no pergaminho principal do Tribos
+    if ($("#content_value").length) {
+        $("#content_value").prepend(frameHtml);
+    } else {
+        $("#main_layout").prepend(frameHtml);
+    }
 
     let debugLines = [];
     function logDebug(msg) {
@@ -237,7 +220,7 @@ javascript:(function() {
         let accountVillages = {};
 
         // 1. Mapear Produção e Nobres em Treino
-        $("#ntLoadingStatus").text("A carregar armazéns e recrutamentos...");
+        $("#ntLoadingStatus").text("A carregar armazéns e recrutamento...");
         try {
             let prodHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod`);
             let docProd = $(prodHtml);
@@ -279,10 +262,6 @@ javascript:(function() {
                         merc: merc,
                         snobs: snobsInTraining
                     };
-
-                    if (snobsInTraining > 0 && uniqueTargets.includes(coord)) {
-                        logDebug(`Alvo ${coord}: +${snobsInTraining} nobre(s) em treino.`);
-                    }
                 }
             });
         } catch(e) {
@@ -321,7 +300,7 @@ javascript:(function() {
         }
 
         // 3. CONSULTA DIRETA AO MERCADO - ISOLAMENTO DE "A CHEGAR"
-        $("#ntLoadingStatus").text("A auditar transportes de entrada nos mercados...");
+        $("#ntLoadingStatus").text("A recolher recursos a chegar...");
         let incomingRes = {};
 
         for (let coord of uniqueTargets) {
@@ -354,8 +333,6 @@ javascript:(function() {
                         });
                     }
                 });
-
-                logDebug(`Mercado ${coord}: +${incomingRes[coord].w.toLocaleString()}W | +${incomingRes[coord].c.toLocaleString()}C | +${incomingRes[coord].i.toLocaleString()}I`);
             } catch(err) {
                 logDebug(`Erro no mercado de ${coord}: ${err}`);
             }
@@ -412,9 +389,9 @@ javascript:(function() {
             }
         });
 
-        $("#statTotalWood").html(`Total wood: <span style="color:#fff;">${grandTotalW.toLocaleString()}</span>`);
-        $("#statTotalClay").html(`Total clay: <span style="color:#fff;">${grandTotalC.toLocaleString()}</span>`);
-        $("#statTotalIron").html(`Total iron: <span style="color:#fff;">${grandTotalI.toLocaleString()}</span>`);
+        $("#statTotalWood").text(`Total wood: ${grandTotalW.toLocaleString()}`);
+        $("#statTotalClay").text(`Total clay: ${grandTotalC.toLocaleString()}`);
+        $("#statTotalIron").text(`Total iron: ${grandTotalI.toLocaleString()}`);
 
         // 6. Distribuição dos Envios
         let transfers = [];
@@ -468,7 +445,7 @@ javascript:(function() {
         tbody.empty();
 
         function focusNextButton() {
-            let firstBtn = $("#ntTableBody tr.task-row:visible .send-direct-btn").first();
+            let firstBtn = $("#ntTableBody tr.task-row:first .send-direct-btn");
             if (firstBtn.length) {
                 firstBtn.focus();
             }
@@ -477,8 +454,8 @@ javascript:(function() {
         function updateCounter() {
             let restantes = $("#ntTableBody tr.task-row").length;
             if (restantes === 0) {
-                $("#ntSummaryText").html("<span style='color:#00ff88;'>✔️ Todas as ordens foram concluídas!</span>");
-                tbody.html("<tr><td colspan='7' style='padding: 20px; font-weight: bold; color: #00ff88; text-align:center;'>Todos os transportes para nobres foram despachados.</td></tr>");
+                $("#ntSummaryText").html("<span style='color:#00ff88;'>✔️ Todos os recursos foram enviados!</span>");
+                tbody.html("<tr><td colspan='7' style='padding: 15px; font-weight: bold; color: #00ff88; text-align:center;'>Ordens concluídas.</td></tr>");
             } else {
                 $("#ntSummaryText").text(`Remaining orders: ${restantes}`);
                 focusNextButton();
@@ -490,9 +467,8 @@ javascript:(function() {
         const iconI = '<span class="icon header iron"> </span>';
 
         if (transfers.length === 0) {
-            tbody.append(`<tr><td colspan='7' style='padding: 15px; color: #ff8888; font-weight: bold;'>Nenhum envio necessário. As aldeias já dispõem de nobres ou recursos suficientes.</td></tr>`);
+            tbody.append(`<tr><td colspan='7' style='padding: 15px; color: #ff8888; font-weight: bold;'>Nenhum envio necessário.</td></tr>`);
             $("#ntSummaryText").text("0 ordens pendentes.");
-            $("#debugLog").show();
         } else {
             transfers.forEach((tr, index) => {
                 let rowClass = index % 2 === 0 ? "rowDarkA" : "rowDarkB";
@@ -513,19 +489,12 @@ javascript:(function() {
 
             updateCounter();
 
-            // Ao clicar ou dar Enter, o envio é disparado e o foco passa imediatamente ao botão seguinte
-            $(document).off("click", ".send-direct-btn").on("click", ".send-direct-btn", function(e) {
+            // DISPARO OTIMISTA E INSTANTÂNEO (IGUAL À SOPHIE)
+            $(document).off("click keydown", ".send-direct-btn").on("click", ".send-direct-btn", function(e) {
+                e.preventDefault();
                 let btn = $(this);
                 let rowId = btn.data("row");
                 let rowElement = $(`#${rowId}`);
-
-                // Move logo o foco para o botão da linha a seguir para permitir manter a tecla premida
-                let nextBtn = rowElement.nextAll("tr.task-row").first().find(".send-direct-btn");
-                if (nextBtn.length) {
-                    nextBtn.focus();
-                }
-
-                btn.prop("disabled", true).text("Sending...");
 
                 let postData = {
                     target_id: btn.data("tid"),
@@ -537,29 +506,14 @@ javascript:(function() {
                     h: game_data.csrf
                 };
 
-                $.ajax({
-                    url: `/game.php?village=${btn.data("src")}&screen=market&mode=send&action=send`,
-                    type: 'POST',
-                    data: postData,
-                    success: function(resp) {
-                        let isError = typeof resp === 'string' && (resp.includes("error_box") || resp.includes("Não há mercadores"));
-                        if (isError) {
-                            let errMatch = resp.match(/<div class="error_box">(.*?)<\/div>/s);
-                            let msg = errMatch ? $(errMatch[0]).text().trim() : "Recusado pelo jogo.";
-                            logDebug(`FALHA no envio: ${msg}`);
-                            UI.ErrorMessage(msg);
-                            btn.prop("disabled", false).text("Send resources");
-                        } else {
-                            UI.SuccessMessage("Recursos enviados com sucesso!");
-                            rowElement.remove();
-                            updateCounter();
-                        }
-                    },
-                    error: function(xhr, status, err) {
-                        logDebug(`HTTP ERROR (${xhr.status}): ${err}`);
-                        btn.prop("disabled", false).text("Send resources");
-                    }
-                });
+                let srcId = btn.data("src");
+
+                // Remove a linha do DOM imediatamente e passa o foco à próxima
+                rowElement.remove();
+                updateCounter();
+
+                // Envia a requisição em background sem travar a interface
+                $.post(`/game.php?village=${srcId}&screen=market&mode=send&action=send`, postData);
             });
         }
 
