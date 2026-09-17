@@ -1,5 +1,5 @@
 javascript:(function() {
-    const SCRIPT_VERSION = "v13.2 - Snob Academy Deep Sync";
+    const SCRIPT_VERSION = "v13.3 - Production Icon Snob Reader";
 
     const cssSophie = `
     <style>
@@ -93,7 +93,7 @@ javascript:(function() {
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A mapear nobres (parados + fora + academia) e recursos...</b></p>
+                <p style="font-size:13px;"><b>A mapear nobres (tropas feitas + ícones de recrutamento em produção)...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
@@ -161,8 +161,8 @@ javascript:(function() {
 
         let accountVillages = {};
 
-        // 1. Mapear Produção Geral
-        $("#ntLoadingStatus").text("A recolher recursos das aldeias...");
+        // 1. Mapear Recursos, Mercadores E Nobres em Recrutamento a partir da Tabela de Produção
+        $("#ntLoadingStatus").text("A ler tabela de produção e ícones de treino...");
         try {
             let prodHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod`);
             let docProd = $(prodHtml);
@@ -189,6 +189,9 @@ javascript:(function() {
                         if (m) { merc = parseInt(m[1]) || 0; return false; }
                     });
 
+                    // Contabilizar ícones de Nobre na coluna Recrutamento da linha
+                    let snobsInTraining = r.find("img[src*='unit_snob'], img[src*='snob']").length;
+
                     accountVillages[coord] = {
                         id: vid,
                         coord: coord,
@@ -198,8 +201,12 @@ javascript:(function() {
                         c: c,
                         i: i,
                         merc: merc,
-                        snobs: 0
+                        snobs: snobsInTraining
                     };
+
+                    if (snobsInTraining > 0 && uniqueTargets.includes(coord)) {
+                        logDebug(`Alvo ${coord}: +${snobsInTraining} nobre(s) em treino na coluna de Recrutamento.`);
+                    }
                 }
             });
             logDebug(`Aldeias mapeadas na produção: ${Object.keys(accountVillages).length}`);
@@ -207,8 +214,8 @@ javascript:(function() {
             logDebug(`Erro ao ler produção: ${e}`);
         }
 
-        // 2. Extração de Nobres (Parados + Fora)
-        $("#ntLoadingStatus").text("A ler tropas completas (nobres dentro e fora)...");
+        // 2. Extração de Nobres já Prontos (Dentro da Aldeia + Fora) via mode=units&type=complete
+        $("#ntLoadingStatus").text("A somar tropas concluídas (aldeia + fora)...");
         try {
             let unitsHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=units&type=complete`);
             let docUnits = $(unitsHtml);
@@ -228,54 +235,18 @@ javascript:(function() {
                     if (link.length) {
                         let coordM = link.text().match(/(\d{3}\|\d{3})/);
                         if (coordM && accountVillages[coordM[1]]) {
-                            let totalCellVal = parseInt(r.find("td").eq(snobColIndex).text().trim()) || 0;
-                            accountVillages[coordM[1]].snobs += totalCellVal;
+                            let readySnobs = parseInt(r.find("td").eq(snobColIndex).text().trim()) || 0;
+                            accountVillages[coordM[1]].snobs += readySnobs;
                         }
                     }
                 });
-                logDebug(`Nobres existentes (aldeia + fora) lidos pela coluna ${snobColIndex}`);
+                logDebug(`Nobres prontos somados pela coluna ${snobColIndex} de tropas completas.`);
             }
         } catch(e) {
             logDebug(`Aviso ao ler tropas: ${e}`);
         }
 
-        // 3. Inspeção Específica da Academia para cada Alvo (Recrutamento em curso)
-        $("#ntLoadingStatus").text("A verificar fila de treino na Academia dos alvos...");
-        for (let coord of uniqueTargets) {
-            let v = accountVillages[coord];
-            if (v && v.id) {
-                try {
-                    let snobHtml = await $.get(`/game.php?village=${v.id}&screen=snob`);
-                    let docSnob = $(snobHtml);
-
-                    let inProduction = 0;
-
-                    // Procura ordens ativas de cancelamento
-                    let cancelLinks = docSnob.find("a[href*='action=cancel']").length;
-                    if (cancelLinks > 0) {
-                        inProduction += cancelLinks;
-                    } else {
-                        // Procura texto de produção (ex: "Nobres em produção: X")
-                        docSnob.find("table.vis tr").each(function() {
-                            let txt = $(this).text();
-                            if (txt.includes("em produção") || txt.includes("em recrutamento")) {
-                                let m = txt.match(/(\d+)/);
-                                if (m) inProduction = parseInt(m[1]) || 0;
-                            }
-                        });
-                    }
-
-                    if (inProduction > 0) {
-                        v.snobs += inProduction;
-                        logDebug(`Alvo ${coord}: +${inProduction} nobre(s) detetado(s) em treino na Academia.`);
-                    }
-                } catch(e) {
-                    logDebug(`Aviso ao inspecionar academia de ${coord}: ${e}`);
-                }
-            }
-        }
-
-        // 4. Transportes a caminho via mode=trader
+        // 3. Transportes a caminho via mode=trader
         $("#ntLoadingStatus").text("A computar transportes em trânsito...");
         let incomingRes = {};
         try {
@@ -298,7 +269,7 @@ javascript:(function() {
             logDebug("Aviso ao ler transportes.");
         }
 
-        // 5. Filtrar Dadoras
+        // 4. Selecionar Dadoras
         let groupVillages = [];
         if (explicitDonors.length > 0) {
             explicitDonors.forEach(coord => {
@@ -313,17 +284,17 @@ javascript:(function() {
                 }
             });
         }
-        logDebug(`Total de dadoras prontas para envio: ${groupVillages.length}`);
+        logDebug(`Total de dadoras disponíveis: ${groupVillages.length}`);
 
-        // 6. Cálculo dos Défices
+        // 5. Cálculo dos Défices Rigorosos
         let targets = [];
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
             let localV = accountVillages[coord] || { id: null, w: 0, c: 0, i: 0, snobs: 0 };
             let inc = incomingRes[coord] || { w: 0, c: 0, i: 0 };
-            let currentNobles = localV.snobs;
+            let totalNobles = localV.snobs; // Prontos + Em treino na produção
 
-            let neededNobles = Math.max(0, targetNobles - currentNobles);
+            let neededNobles = Math.max(0, targetNobles - totalNobles);
             let totalReqW = neededNobles * CUSTO_NOBRE.w;
             let totalReqC = neededNobles * CUSTO_NOBRE.c;
             let totalReqI = neededNobles * CUSTO_NOBRE.i;
@@ -332,7 +303,7 @@ javascript:(function() {
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
 
-            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres (Totais): [${currentNobles}/${targetNobles}] | Défice: ${defW}W ${defC}C ${defI}I`);
+            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres Totais (Prontos+Treino): [${totalNobles}/${targetNobles}] | Défice: ${defW}W ${defC}C ${defI}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
@@ -345,7 +316,7 @@ javascript:(function() {
             }
         });
 
-        // 7. Distribuição dos Envios por Menor Distância
+        // 6. Distribuição dos Envios por Menor Distância
         let transfers = [];
         targets.forEach(t => {
             groupVillages.sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y));
