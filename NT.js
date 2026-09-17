@@ -1,5 +1,5 @@
 javascript:(function() {
-    const SCRIPT_VERSION = "v13.6 - Clean Trader Number Parser";
+    const SCRIPT_VERSION = "v14.0 - Direct Village Market Fetch";
 
     const cssSophie = `
     <style>
@@ -93,7 +93,7 @@ javascript:(function() {
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A mapear nobres e transportes em trânsito...</b></p>
+                <p style="font-size:13px;"><b>A contactar os mercados de cada alvo individualmente...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
@@ -161,8 +161,8 @@ javascript:(function() {
 
         let accountVillages = {};
 
-        // 1. Mapear Recursos e Ícones de Treino na Produção
-        $("#ntLoadingStatus").text("A ler tabela de produção e ícones de treino...");
+        // 1. Mapear Produção e Ícones de Nobre em Treino
+        $("#ntLoadingStatus").text("A ler tabela de produção e recrutamentos...");
         try {
             let prodHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod`);
             let docProd = $(prodHtml);
@@ -213,8 +213,8 @@ javascript:(function() {
             logDebug(`Erro ao ler produção: ${e}`);
         }
 
-        // 2. Nobres Concluídos (Dentro + Fora)
-        $("#ntLoadingStatus").text("A somar tropas concluídas (aldeia + fora)...");
+        // 2. Mapear Nobres Prontos
+        $("#ntLoadingStatus").text("A somar tropas concluídas...");
         try {
             let unitsHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=units&type=complete`);
             let docUnits = $(unitsHtml);
@@ -245,50 +245,43 @@ javascript:(function() {
             logDebug(`Aviso ao ler tropas: ${e}`);
         }
 
-        // 3. Parser Rigoroso de Transportes a Entrar (mode=trader)
-        $("#ntLoadingStatus").text("A computar transportes em trânsito...");
+        // 3. CONSULTA DIRETA AO MERCADO DE CADA ALDEIA ALVO
+        $("#ntLoadingStatus").text("A consultar o mercado direto de cada alvo...");
         let incomingRes = {};
-        try {
-            let traderHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=trader`);
-            let docTrader = $(traderHtml);
 
-            // Procurar especificamente as linhas que têm a seta de transporte a entrar (seta castanha para a esquerda)
-            docTrader.find("table.vis tr").each(function() {
-                let r = $(this);
-                let textRow = r.text();
-                
-                // Tem de ter coordenadas e pelo menos uma imagem de madeira/argila/ferro na última célula
-                let coordMatches = textRow.match(/\d{3}\|\d{3}/g);
-                if (!coordMatches || coordMatches.length < 1) return;
+        for (let coord of uniqueTargets) {
+            let targetV = accountVillages[coord];
+            if (!targetV || !targetV.id) continue;
 
-                let lastTd = r.find("td").last();
-                let isWood = lastTd.find("span.icon.header.wood, img[src*='wood']").length > 0;
-                let isStone = lastTd.find("span.icon.header.stone, img[src*='stone']").length > 0;
-                let isIron = lastTd.find("span.icon.header.iron, img[src*='iron']").length > 0;
+            incomingRes[coord] = { w: 0, c: 0, i: 0 };
+            try {
+                let mHtml = await $.get(`/game.php?village=${targetV.id}&screen=market`);
+                let docM = $(mHtml);
 
-                if (!isWood && !isStone && !isIron) return;
+                // No ecrã do mercado da própria aldeia, os transportes a chegar estão nas tabelas vis com a class .wood/.stone/.iron
+                docM.find("table.vis").each(function() {
+                    let t = $(this);
+                    let header = t.find("th").first().text().toLowerCase();
+                    if (header.includes("chegada") || header.includes("transporte") || header.includes("mercador") || t.text().includes("Transportes a caminho") || t.text().includes("A chegar")) {
+                        t.find("tr").each(function() {
+                            let r = $(this);
+                            r.find("span.wood, .icon.header.wood").each(function() {
+                                incomingRes[coord].w += parseInt($(this).parent().text().replace(/\D/g, '')) || 0;
+                            });
+                            r.find("span.stone, .icon.header.stone").each(function() {
+                                incomingRes[coord].c += parseInt($(this).parent().text().replace(/\D/g, '')) || 0;
+                            });
+                            r.find("span.iron, .icon.header.iron").each(function() {
+                                incomingRes[coord].i += parseInt($(this).parent().text().replace(/\D/g, '')) || 0;
+                            });
+                        });
+                    }
+                });
 
-                // Destino é a coordenada da coluna 'Aldeia' (a última coordenada da linha)
-                let destCoord = coordMatches[coordMatches.length - 1];
-                if (!incomingRes[destCoord]) incomingRes[destCoord] = { w: 0, c: 0, i: 0 };
-
-                // Extrair estritamente o valor numérico apenas do último TD (onde está o ícone do recurso)
-                // Ex: "40.000" ou "40 000" -> 40000
-                let rawResText = lastTd.text().trim().replace(/\./g, '').replace(/\s/g, '');
-                let numMatch = rawResText.match(/\d+/);
-                let val = numMatch ? parseInt(numMatch[0]) : 0;
-
-                // Sanity check: um transporte de mercado tem no máximo o total de mercadores * 1000 (raramente passa de 500k por linha)
-                if (val > 1000000) {
-                    val = 0; // Descarta contaminações com carimbos de data/hora
-                }
-
-                if (isWood) incomingRes[destCoord].w += val;
-                if (isStone) incomingRes[destCoord].c += val;
-                if (isIron) incomingRes[destCoord].i += val;
-            });
-        } catch(e) {
-            logDebug(`Aviso ao ler transportes: ${e}`);
+                logDebug(`Mercado direto de ${coord}: +${incomingRes[coord].w.toLocaleString()}W | +${incomingRes[coord].c.toLocaleString()}C | +${incomingRes[coord].i.toLocaleString()}I a chegar.`);
+            } catch(err) {
+                logDebug(`Erro ao ler mercado direto de ${coord}: ${err}`);
+            }
         }
 
         // 4. Selecionar Dadoras
@@ -308,7 +301,7 @@ javascript:(function() {
         }
         logDebug(`Total de dadoras disponíveis: ${groupVillages.length}`);
 
-        // 5. Cálculo dos Défices com Dados Limpos
+        // 5. Cálculo dos Défices com Recursos Confirmados
         let targets = [];
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
