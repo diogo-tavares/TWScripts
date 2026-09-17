@@ -1,5 +1,5 @@
 javascript:(function() {
-    const SCRIPT_VERSION = "v13.3 - Production Icon Snob Reader";
+    const SCRIPT_VERSION = "v13.5 - Detailed Incoming Resources Debug";
 
     const cssSophie = `
     <style>
@@ -57,7 +57,7 @@ javascript:(function() {
             color: #0f0;
             font-family: monospace;
             font-size: 10px;
-            max-height: 240px;
+            max-height: 260px;
             overflow-y: auto;
             text-align: left;
             border-radius: 3px;
@@ -93,7 +93,7 @@ javascript:(function() {
             </div>
 
             <div id="ntLoadingStep" style="display:none; text-align:center; padding: 25px;">
-                <p style="font-size:13px;"><b>A mapear nobres (tropas feitas + ícones de recrutamento em produção)...</b></p>
+                <p style="font-size:13px;"><b>A mapear nobres e transportes em trânsito...</b></p>
                 <div id="ntLoadingStatus" style="font-size:12px; color:#803000; margin-top:5px;"></div>
             </div>
 
@@ -161,7 +161,7 @@ javascript:(function() {
 
         let accountVillages = {};
 
-        // 1. Mapear Recursos, Mercadores E Nobres em Recrutamento a partir da Tabela de Produção
+        // 1. Mapear Recursos e Ícones de Treino na Produção
         $("#ntLoadingStatus").text("A ler tabela de produção e ícones de treino...");
         try {
             let prodHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=prod`);
@@ -189,7 +189,6 @@ javascript:(function() {
                         if (m) { merc = parseInt(m[1]) || 0; return false; }
                     });
 
-                    // Contabilizar ícones de Nobre na coluna Recrutamento da linha
                     let snobsInTraining = r.find("img[src*='unit_snob'], img[src*='snob']").length;
 
                     accountVillages[coord] = {
@@ -205,7 +204,7 @@ javascript:(function() {
                     };
 
                     if (snobsInTraining > 0 && uniqueTargets.includes(coord)) {
-                        logDebug(`Alvo ${coord}: +${snobsInTraining} nobre(s) em treino na coluna de Recrutamento.`);
+                        logDebug(`Alvo ${coord}: +${snobsInTraining} nobre(s) em treino detetado(s).`);
                     }
                 }
             });
@@ -214,7 +213,7 @@ javascript:(function() {
             logDebug(`Erro ao ler produção: ${e}`);
         }
 
-        // 2. Extração de Nobres já Prontos (Dentro da Aldeia + Fora) via mode=units&type=complete
+        // 2. Nobres Concluídos (Dentro + Fora)
         $("#ntLoadingStatus").text("A somar tropas concluídas (aldeia + fora)...");
         try {
             let unitsHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=units&type=complete`);
@@ -240,33 +239,44 @@ javascript:(function() {
                         }
                     }
                 });
-                logDebug(`Nobres prontos somados pela coluna ${snobColIndex} de tropas completas.`);
+                logDebug(`Nobres prontos somados pela coluna ${snobColIndex}.`);
             }
         } catch(e) {
             logDebug(`Aviso ao ler tropas: ${e}`);
         }
 
-        // 3. Transportes a caminho via mode=trader
-        $("#ntLoadingStatus").text("A computar transportes em trânsito...");
+        // 3. Parser de Transportes Individuais (mode=trader)
+        $("#ntLoadingStatus").text("A computar transportes em trânsito por tipo de recurso...");
         let incomingRes = {};
         try {
             let traderHtml = await $.get(`/game.php?village=${game_data.village.id}&screen=overview_villages&mode=trader`);
             let docTrader = $(traderHtml);
 
-            docTrader.find("#trades_table tr, table.vis tr").each(function() {
+            docTrader.find("table.vis tr").each(function() {
                 let r = $(this);
-                let destMatch = r.text().match(/(\d{3}\|\d{3})/g);
-                if (destMatch && destMatch.length >= 2) {
-                    let destCoord = destMatch[1];
-                    if (!incomingRes[destCoord]) incomingRes[destCoord] = { w: 0, c: 0, i: 0 };
-                    incomingRes[destCoord].w += parseInt(r.find(".wood").text().replace(/\D/g, '')) || 0;
-                    incomingRes[destCoord].c += parseInt(r.find(".stone").text().replace(/\D/g, '')) || 0;
-                    incomingRes[destCoord].i += parseInt(r.find(".iron").text().replace(/\D/g, '')) || 0;
+                let cells = r.find("td");
+                if (cells.length < 5) return;
+
+                let textRow = r.text();
+                let coordMatches = textRow.match(/\d{3}\|\d{3}/g);
+                if (!coordMatches) return;
+
+                let destCoord = coordMatches[coordMatches.length - 1];
+                if (!incomingRes[destCoord]) incomingRes[destCoord] = { w: 0, c: 0, i: 0 };
+
+                let lastCell = cells.last();
+                let val = parseInt(lastCell.text().replace(/\D/g, '')) || 0;
+
+                if (lastCell.find("span.icon.header.wood, img[src*='wood']").length || lastCell.find(".wood").length) {
+                    incomingRes[destCoord].w += val;
+                } else if (lastCell.find("span.icon.header.stone, img[src*='stone']").length || lastCell.find(".stone").length) {
+                    incomingRes[destCoord].c += val;
+                } else if (lastCell.find("span.icon.header.iron, img[src*='iron']").length || lastCell.find(".iron").length) {
+                    incomingRes[destCoord].i += val;
                 }
             });
-            logDebug("Transportes a caminho mapeados.");
         } catch(e) {
-            logDebug("Aviso ao ler transportes.");
+            logDebug(`Aviso ao ler transportes: ${e}`);
         }
 
         // 4. Selecionar Dadoras
@@ -286,13 +296,13 @@ javascript:(function() {
         }
         logDebug(`Total de dadoras disponíveis: ${groupVillages.length}`);
 
-        // 5. Cálculo dos Défices Rigorosos
+        // 5. Cálculo dos Défices com Auditoria Detalhada
         let targets = [];
         uniqueTargets.forEach(coord => {
             let [x, y] = coord.split("|").map(Number);
             let localV = accountVillages[coord] || { id: null, w: 0, c: 0, i: 0, snobs: 0 };
             let inc = incomingRes[coord] || { w: 0, c: 0, i: 0 };
-            let totalNobles = localV.snobs; // Prontos + Em treino na produção
+            let totalNobles = localV.snobs;
 
             let neededNobles = Math.max(0, targetNobles - totalNobles);
             let totalReqW = neededNobles * CUSTO_NOBRE.w;
@@ -303,7 +313,13 @@ javascript:(function() {
             let defC = Math.max(0, totalReqC - (localV.c + inc.c));
             let defI = Math.max(0, totalReqI - (localV.i + inc.i));
 
-            logDebug(`Alvo ${coord} (ID: ${localV.id}) | Nobres Totais (Prontos+Treino): [${totalNobles}/${targetNobles}] | Défice: ${defW}W ${defC}C ${defI}I`);
+            // Relatório detalhado para cada aldeia alvo
+            logDebug(`--- ALVO: ${coord} (ID: ${localV.id}) ---`);
+            logDebug(`  Nobres: [${totalNobles}/${targetNobles}] (Faltam: ${neededNobles})`);
+            logDebug(`  Armazém local: ${localV.w.toLocaleString()}W | ${localV.c.toLocaleString()}C | ${localV.i.toLocaleString()}I`);
+            logDebug(`  A caminho:     ${inc.w.toLocaleString()}W | ${inc.c.toLocaleString()}C | ${inc.i.toLocaleString()}I`);
+            logDebug(`  Total útil:    ${(localV.w + inc.w).toLocaleString()}W | ${(localV.c + inc.c).toLocaleString()}C | ${(localV.i + inc.i).toLocaleString()}I`);
+            logDebug(`  Défice final:  ${defW.toLocaleString()}W | ${defC.toLocaleString()}C | ${defI.toLocaleString()}I`);
 
             if ((defW + defC + defI) > 0) {
                 targets.push({
@@ -316,7 +332,7 @@ javascript:(function() {
             }
         });
 
-        // 6. Distribuição dos Envios por Menor Distância
+        // 6. Distribuição dos Envios
         let transfers = [];
         targets.forEach(t => {
             groupVillages.sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y));
